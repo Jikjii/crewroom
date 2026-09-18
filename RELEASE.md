@@ -1,6 +1,6 @@
 # Crewroom 0.3: from laptop preview to a phone beta
 
-The hosted beta is live at **https://joincrewroom.com** with saved **System / Light / Dark** appearance, account deletion, working password-reset email, and public policy/support routes. Expo is linked and native build profiles target the hosted service. Signed native builds, physical-device acceptance, and store submission are separate steps below.
+The hosted beta is live at **https://joincrewroom.com** with saved **System / Light / Dark** appearance, account deletion, working password-reset email, and public policy/support routes. Expo is linked and native build profiles target the hosted service. iPhone App Store distribution **0.3.0 (2)** is uploaded and processed by Apple. As of September 18, 2026 at 12:26 PM EDT, it is **Waiting for Review** in the private external TestFlight group **Crewroom Private Beta**. Three authorized testers are added and automatic notification is configured, but Apple currently shows **No Builds Available** for them. No public invitation link is enabled; approval and invitation delivery are not yet confirmed.
 
 ## Hosted server status
 
@@ -12,7 +12,7 @@ For existing pilot data, stop writes, make a complete database-and-photo backup,
 
 The owner confirmed the hosted gallery and photos over cellular with the Mac asleep, and persistence across a Render restart. The installed iPhone preview 0.3.0 (build 1) subsequently passed user-reported installation, launch, sign-in, photo upload/retrieval, dark-mode and session persistence, and cellular upload/retrieval with the Mac asleep. Android preview 0.3.0 (build 3) is ready but physical testing is deferred because no Android phone is available. These core checks do not replace the broader release checks below.
 
-## Then, build an installable app
+## Native build configuration
 
 Use the already-linked [Crewroom Expo project](https://expo.dev/accounts/geraldogs-team/projects/crewroom). CLI account `geraldog` is authenticated; the project belongs to `geraldogs-team`. See [NATIVE-TESTING.md](NATIVE-TESTING.md) for installation details and the build record.
 
@@ -28,7 +28,7 @@ These public values are already configured; do not create another project or rer
 
 The app identifier is registered with Apple team `A48T68DM6A` and should stay stable for future signed updates. `.easignore` excludes local data, environment files, credentials, backups, work files, and server-only source from native source uploads. Keep mail and backup keys on the **server only**. See [Expo’s environment-variable guidance](https://docs.expo.dev/eas/environment-variables/usage/).
 
-Start with Android; it can be installed directly as an APK without a Google Play developer account:
+The completed Android preview can be installed directly as an APK without a Google Play developer account. For a later replacement build:
 
 ```sh
 npx eas-cli@latest build --platform android --profile preview
@@ -47,7 +47,7 @@ The account owner completes Apple authentication and two-factor prompts. Select 
 
 `npm run build:native` is only a JavaScript/assets export check. It does **not** create a signed installable app. Likewise, a successful browser check does not verify native secure storage, a native photo picker, or iOS/Android installation.
 
-## Device acceptance before store submission
+## Remaining device acceptance
 
 Use two disposable beta accounts. Record device model, OS version, build number, date and result. Validate iPhone for the current private TestFlight beta; physical Android acceptance remains a separate prerequisite for an Android release.
 
@@ -55,20 +55,28 @@ Use two disposable beta accounts. Record device model, OS version, build number,
 - Select Light, Dark and System from the header’s Appearance button. Reopen the app and confirm persistence. With System selected, change the phone’s OS appearance. Check dialogs, text inputs, keyboard, photo picker, status bar and safe areas.
 - Choose/cancel photos; test large images and iPhone HEIC photos, denied permission, rotated images, failed uploads and retry. Check uploaded images from the other device.
 - Submit public profile/work → operator inspect/approve → discover → submit comment → operator inspect/approve → collaboration request → accept → new private crew → assign/complete a task. Verify pending/rejected submissions and unrelated private crews are inaccessible. Editing approved profile/work must queue it again.
-- Use report/block and inspect the operator’s report queue. Follow [MODERATION.md](MODERATION.md), including image inspection and rejection reasons. Establish who reviews submissions/reports and how urgent child-safety issues and appeals are escalated.
+- Use report/block and inspect the operator’s report queue. Follow [MODERATION.md](MODERATION.md), including image inspection and rejection reasons. Geraldo Grell has committed to daily submission/report review; complete the routine private image-review transfer setup and validate the urgent-issue and appeal procedures.
 - Request a password reset using a test mailbox. Verify successful delivery, reuse/expiry rejection, and sign-out on both devices after reset.
 - Review account deletion with a shared crew and a solo crew. Delete only the disposable account, verify ownership transfer, preserved collaborators’ plans, removed account/photos, and signed-out devices. Also test the signed-out website’s `/delete-account` route.
 - Repeat over cellular with the computer off; interrupt connectivity, background/reopen, use large text and the Android back button. The beta needs an internet connection; offline editing is not implemented.
 
 This release currently targets phones (`supportsTablet: false`). Test and design for iPad deliberately before adding tablet support.
 
-## Store release comes after that
+## Private TestFlight release
+
+Apple listing **Crewroom: Cosplay & Crews** is app `6813563844`. Production iPhone **0.3.0 (2)** is [EAS build 7f3b3057](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/7f3b3057-cb92-4bb5-8bc0-df46d1e1259d); [submission c6757624](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/c6757624-2168-41b4-8975-bf591bf7e654) succeeded September 18 at 12:18 PM EDT and Apple processing completed. The build's Apple identifier is `5c0a8ae8-0770-4970-8888-7ee153c3ee95`.
+
+At 12:26 PM EDT, Apple showed **Waiting for Review** in **Crewroom Private Beta**, group `858d3c31-fabf-41d3-8b80-50eff303d459`. Beta metadata, What to Test, review contact and the authorized dedicated reviewer login are saved. The group has **3 external testers and 1 build**. Automatic tester notification is configured and the public link remains disabled. All three testers currently show **No Builds Available**, pending Apple's decision. Adding testers is not evidence that an invitation was delivered or that the app is installable.
+
+The current target is private TestFlight. This does not publish a public App Store listing. Do not rerun the successful submission or generate a duplicate build. For a future release only:
 
 ```sh
 npx eas-cli@latest build --platform ios --profile production
-CREWROOM_APP_ID=com.joincrewroom.app EXPO_PUBLIC_API_URL=https://joincrewroom.com EXPO_PUBLIC_WEB_URL=https://joincrewroom.com npx eas-cli@latest submit --platform ios --profile production
+CREWROOM_APP_ID=com.joincrewroom.app EXPO_PUBLIC_API_URL=https://joincrewroom.com EXPO_PUBLIC_WEB_URL=https://joincrewroom.com npx eas-cli@latest submit --platform ios --profile production --id NEW_BUILD_ID
 ```
 
-The current release target is **private TestFlight**, confirmed by the owner. This produces and uploads the store-distribution iPhone build; the ad hoc preview IPA cannot be submitted. Create the App Store Connect app record, provide accurate beta metadata and dedicated reviewer access, and use an external group with email invitations and its public link disabled. External testing requires Apple's beta review; uploading alone does not make the beta available or publish an App Store listing. Configure separate Android testing when a physical Android test is available. Follow [Expo’s submission guide](https://docs.expo.dev/submit/ios/).
+The ad hoc preview IPA cannot be submitted to TestFlight. Configure separate Android testing when a physical Android test is available. Follow [Expo’s submission guide](https://docs.expo.dev/submit/ios/).
 
-The current source adds human approval before public profiles, posts, and comments become visible, alongside reporting/blocking and community standards. Follow [MODERATION.md](MODERATION.md) to inspect the exact version and every image before approval. Deploy and verify this gate, review real public content queued by migration, and assign the moderation/child-safety operation before external beta distribution. The operator has not yet confirmed a daily review commitment. A private external TestFlight beta still follows Apple's review guidelines; a compiled build does not establish compliance, live deployment, staffing, or Apple approval. Check the current [Apple user-generated-content rules](https://developer.apple.com/app-store/review/guidelines/#user-generated-content), [Apple beta-testing rules](https://developer.apple.com/app-store/review/guidelines/#beta-testing), [Apple account deletion requirements](https://developer.apple.com/support/offering-account-deletion-in-your-app), and [Google’s deletion requirements](https://support.google.com/googleplay/android-developer/answer/13327111?hl=en). Google also has [child-safety standards for social apps](https://support.google.com/googleplay/android-developer/answer/14747720?hl=en).
+Human approval before public profiles, posts and comments become visible is deployed and live-verified in `17d8e50`, alongside reporting/blocking and community standards. The existing public-content migration queue was individually inspected and approved; no private drafts were published. Geraldo Grell confirmed daily submission/report review. Follow [MODERATION.md](MODERATION.md) to inspect the exact version and every image before approval. A convenient private image-review transfer route still needs to be established for routine operator use; the CLI can export a private self-contained HTML packet. Human review is not an automated image classifier, and report status alone does not remove content.
+
+A private external TestFlight beta follows Apple's review guidelines; upload success and completed processing do not establish Apple approval. Check the current [Apple user-generated-content rules](https://developer.apple.com/app-store/review/guidelines/#user-generated-content), [Apple beta-testing rules](https://developer.apple.com/app-store/review/guidelines/#beta-testing), [Apple account deletion requirements](https://developer.apple.com/support/offering-account-deletion-in-your-app), and [Google’s deletion requirements](https://support.google.com/googleplay/android-developer/answer/13327111?hl=en). Google also has [child-safety standards for social apps](https://support.google.com/googleplay/android-developer/answer/14747720?hl=en).

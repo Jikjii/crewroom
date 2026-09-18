@@ -1,6 +1,6 @@
 # Crewroom: installable phone beta
 
-Updated September 18, 2026. Android preview 0.3.0 (build 3) and iPhone ad hoc preview 0.3.0 (build 1) are complete. The owner reported core iPhone installation, login, photo, dark-mode, persistence and cellular checks passed; Android physical testing is deferred. App Store distribution iPhone 0.3.0 (build 2) is complete and its TestFlight upload has been queued. This is a private TestFlight release, not a public App Store launch.
+Updated September 18, 2026. Android preview 0.3.0 (build 3) and iPhone ad hoc preview 0.3.0 (build 1) are complete. The owner reported core iPhone installation, login, photo, dark-mode, persistence and cellular checks passed; Android physical testing is deferred. App Store distribution iPhone 0.3.0 (build 2) is uploaded and processed. At 12:26 PM EDT, Apple showed **Waiting for Review** in **Crewroom Private Beta**. Three external testers are added with automatic notification configured; they still show **No Builds Available** pending Apple approval. This is a private TestFlight release, not a public App Store launch.
 
 ## What is ready
 
@@ -46,7 +46,7 @@ Local validation on September 18 resolved the preview configuration to the owner
 
 ## 2. Install or rebuild Android
 
-Use [preview build 3](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/faaadd41-0526-4b87-ab4c-e04962cab939) when its status is Finished. Expo manages the Android signing key. Build 2 is superseded because its validation reported the missing direct `expo-font` dependency; build 3 includes the fix and passes all 21 Expo checks. The Expo dashboard showed the Free plan with 15 Android builds included before these two builds.
+Use the completed [preview build 3](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/faaadd41-0526-4b87-ab4c-e04962cab939). Expo manages the Android signing key. Build 2 is superseded because its validation reported the missing direct `expo-font` dependency; build 3 includes the fix and passes all 21 Expo checks. The Expo dashboard showed the Free plan with 15 Android builds included before these two builds.
 
 To create a later preview:
 
@@ -60,13 +60,13 @@ After the build succeeds, open its EAS installation link on the Android phone an
 
 ## 3. Register the iPhone, then build
 
-Once Apple Developer enrollment is active:
+Apple Developer enrollment is active. For another ad hoc preview, register any additional devices first:
 
 ```sh
 npx eas-cli@latest device:create
 ```
 
-Open the registration link on each intended test iPhone and complete registration. Include the owner's and sister's phones before building. Then:
+Open the registration link on each intended test iPhone and complete registration. Include each intended ad hoc test phone before building. TestFlight testers do not need ad hoc device registration. Then:
 
 ```sh
 npx eas-cli@latest build --platform ios --profile preview
@@ -83,11 +83,11 @@ Both preview builds use the live beta's accounts and data. Use disposable accoun
 1. Launch over cellular with the Mac asleep; sign in and reopen the app after fully closing it.
 2. Save a private photo draft using the native picker; cancel picking; check a large/rotated image and an iPhone HEIC image where available. Reopen the draft from the other device.
 3. Switch Light / Dark / System and reopen the app. With System selected, change the phone's appearance; check keyboard, dialogs, status bar, and screen edges.
-4. Run a two-account collaboration: publish a test post, request/accept collaboration, and verify the resulting private crew is visible only to its members.
+4. Run a two-account collaboration: submit public profiles/work, have the operator inspect and approve them, submit a comment for approval, request/accept collaboration, and verify the resulting private crew is visible only to its members. Check pending/rejected states and that edits queue approved profiles/work again.
 5. Reset a disposable account's password using email, then sign in with the new password. Test report/block and account deletion following the fuller device checklist in `RELEASE.md`.
 6. Lose connectivity and restore it; background/reopen; check larger text and Android Back.
 
-`npm run build:native` checks JavaScript/assets only; it does not create an APK/IPA, sign an app, or validate a physical phone. Production/TestFlight/Play testing and public store submission remain separate later steps.
+`npm run build:native` checks JavaScript/assets only; it does not create an APK/IPA, sign an app, or validate a physical phone. The production iPhone build is now awaiting TestFlight review. Its physical acceptance remains separate from the completed ad hoc checks; Android/Play testing and any public store release are separate work.
 
 ## Build record
 
@@ -95,16 +95,20 @@ Both preview builds use the live beta's accounts and data. Use disposable accoun
 |---|---|---|---|---|---|
 | Android | [Build 3](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/faaadd41-0526-4b87-ab4c-e04962cab939) | 0.3.0 (3) | Pending | Pending | Pending |
 | iPhone ad hoc | [Build 1](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/8ff22f27-f04c-4081-8c17-b275634bcabe) | 0.3.0 (1) | Not recorded | Yes, user-reported | Core checks passed, user-reported |
-| iPhone App Store distribution | [Build 2](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/7f3b3057-cb92-4bb5-8bc0-df46d1e1259d) | 0.3.0 (2) | Pending TestFlight | Pending | Build complete; upload queued |
+| iPhone App Store distribution | [Build 2](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/7f3b3057-cb92-4bb5-8bc0-df46d1e1259d) | 0.3.0 (2) | Pending TestFlight | Pending | Apple processing complete; Waiting for Review |
 
 ## Private TestFlight build 2
 
 Apple listing: **Crewroom: Cosplay & Crews** (the plain Crewroom name was unavailable); the installed name remains Crewroom. Build 2 uses the SDK 57 patch updates and owner-visible submission review states. Local Expo Doctor passed 21/21. The IPA targets iOS 16.4+, contains the live HTTPS origin and icon font, has an App Store profile with no device allowlist and no debug entitlement, and passed ZIP CRC checks. Its provisioning CMS signature was verified without independently evaluating Apple certificate-chain trust.
 
-Submission [c6757624](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/c6757624-2168-41b4-8975-bf591bf7e654) is queued with EAS. Upload completion, Apple processing, external beta review and tester invitations are separate remaining steps. `eas.json` records the real App Store Connect ID. For submission from Terminal, supply the app identifier because build-profile environment values are not automatically supplied to the submit command:
+Submission [c6757624](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/c6757624-2168-41b4-8975-bf591bf7e654) succeeded September 18 at **12:18 PM EDT**. Apple processing is **Complete**, with Apple build UUID `5c0a8ae8-0770-4970-8888-7ee153c3ee95`. At **12:26 PM EDT**, build 0.3.0 (2) showed **Waiting for Review** in external group **Crewroom Private Beta**, UUID `858d3c31-fabf-41d3-8b80-50eff303d459`.
+
+The group has **3 authorized external testers and 1 build**. Automatic notification is configured; no public invitation link is enabled. Testers currently show **No Builds Available**. Do not describe invitations as delivered, Apple review as approved, or TestFlight installation as available until those states are verified. The dedicated reviewer login, private contact details, beta metadata and What to Test are saved in App Store Connect.
+
+`eas.json` records the real App Store Connect ID. For a future submission only, supply the app identifier because build-profile environment values are not automatically supplied to the submit command:
 
 ```sh
-CREWROOM_APP_ID=com.joincrewroom.app EXPO_PUBLIC_API_URL=https://joincrewroom.com EXPO_PUBLIC_WEB_URL=https://joincrewroom.com npx eas-cli@latest submit --platform ios --profile production --id 7f3b3057-cb92-4bb5-8bc0-df46d1e1259d
+CREWROOM_APP_ID=com.joincrewroom.app EXPO_PUBLIC_API_URL=https://joincrewroom.com EXPO_PUBLIC_WEB_URL=https://joincrewroom.com npx eas-cli@latest submit --platform ios --profile production --id NEW_BUILD_ID
 ```
 
-Do not rerun a queued or successful submission. Expo holds an App Manager API key for EAS Submit; no credential was added to the repository. See [MODERATION.md](MODERATION.md) before opening external testing.
+Do not rerun the successful submission or build again for the same release. Expo holds an App Manager API key for EAS Submit; no credential was added to the repository. Geraldo Grell confirmed daily moderation; follow [MODERATION.md](MODERATION.md) and finish the routine private image-review transfer setup. Upload completion and TestFlight review submission do not establish Apple approval or physical-device acceptance of build 2.
