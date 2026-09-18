@@ -1,0 +1,41 @@
+{
+  "expo": {
+    "name": "Crewroom",
+    "slug": "crewroom",
+    "scheme": "crewroom",
+    "version": "0.3.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "backgroundColor": "#F6F5F0",
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "predictiveBackGestureEnabled": true,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/crewroom-adaptive.png",
+        "backgroundColor": "#335BD6",
+        "monochromeImage": "./assets/crewroom-monochrome.png"
+      }
+    },
+    "web": {
+      "name": "Crewroom",
+      "shortName": "Crewroom",
+      "backgroundColor": "#F6F5F0",
+      "themeColor": "#335BD6",
+      "favicon": "./assets/crewroom-favicon.png"
+    },
+    "plugins": [
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose photos to add to your Crewroom projects.",
+          "cameraPermission": false,
+          "microphonePermission": false
+        }
+      ]
+    ],
+    "icon": "./assets/crewroom-icon.png"
+  }
+}

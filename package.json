@@ -1,0 +1,50 @@
+{
+  "name": "crewroom",
+  "version": "0.3.0",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/metro-runtime": "~57.0.15",
+    "@expo/vector-icons": "^15.0.2",
+    "expo": "~57.0.23",
+    "expo-clipboard": "~57.0.2",
+    "expo-constants": "~57.0.18",
+    "expo-image-manipulator": "~57.0.18",
+    "expo-image-picker": "~57.0.18",
+    "expo-secure-store": "~57.0.4",
+    "expo-status-bar": "~57.0.1",
+    "expo-system-ui": "~57.0.4",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-web": "~0.21.0",
+    "sharp": "^0.35.4"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:phone": "node scripts/dev.mjs --phone",
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "tsc --noEmit",
+    "test": "node --test tests/*.test.mjs",
+    "build:web": "expo export --platform web --clear",
+    "build:native": "expo export --platform ios --platform android --clear",
+    "api": "node --env-file-if-exists=.env server/index.mjs",
+    "moderate": "node --env-file-if-exists=.env server/moderate.mjs",
+    "serve": "node --env-file-if-exists=.env server/index.mjs",
+    "preflight": "node --env-file-if-exists=.env scripts/preflight.mjs",
+    "backup": "node --env-file-if-exists=.env scripts/backup.mjs",
+    "restore": "node --env-file-if-exists=.env scripts/restore.mjs",
+    "build:hosted": "expo export --platform web --clear && node --env-file-if-exists=.env scripts/preflight.mjs --write-build-info"
+  },
+  "private": true,
+  "engines": {
+    "node": ">=24"
+  }
+}

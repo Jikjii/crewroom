@@ -1,0 +1,45 @@
+# Selected beta hosting configuration. Creating this service incurs the plan/disk costs.
+# Use this app directory as the repository root, or adjust dockerfilePath/dockerContext.
+services:
+  - type: web
+    name: crewroom-beta
+    runtime: docker
+    plan: 1c-2g
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    numInstances: 1
+    healthCheckPath: /api/health
+    autoDeployTrigger: "off"
+    disk:
+      name: crewroom-data
+      mountPath: /var/data
+      sizeGB: 10
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: HOST
+        value: 0.0.0.0
+      - key: PORT
+        value: 10000
+      # Change only after confirming the trusted provider proxy topology; see DEPLOY.md.
+      - key: TRUST_PROXY_HOPS
+        value: 0
+      - key: APP_ORIGIN
+        value: https://joincrewroom.com
+      - key: EXPO_PUBLIC_API_URL
+        value: https://joincrewroom.com
+      - key: EXPO_PUBLIC_WEB_URL
+        value: https://joincrewroom.com
+      - key: OPERATOR_NAME
+        value: Geraldo Grell
+      - key: SUPPORT_EMAIL
+        value: support@joincrewroom.com
+      # Enter true only after reviewing the public pages with the real operator details.
+      - key: POLICIES_APPROVED
+        sync: false
+      - key: POLICY_VERSION
+        value: beta-1
+      - key: MINIMUM_AGE
+        value: 18

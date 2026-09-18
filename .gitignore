@@ -1,0 +1,14 @@
+node_modules/
+.expo/
+.data/
+dist/
+dist-native/
+work/
+backups/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.env*
+!.env.example
+.DS_Store
+*.log

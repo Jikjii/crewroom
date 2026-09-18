@@ -1,0 +1,18 @@
+{
+  "cli": { "version": ">= 18.0.0", "appVersionSource": "remote" },
+  "build": {
+    "preview": {
+      "distribution": "internal",
+      "environment": "preview",
+      "node": "24.13.0",
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "environment": "production",
+      "node": "24.13.0",
+      "autoIncrement": true,
+      "android": { "buildType": "app-bundle" }
+    }
+  },
+  "submit": { "production": {} }
+}
