@@ -2,6 +2,7 @@ import { readFile, writeFile, access } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRuntime, publicHttpsOrigin } from "../server/runtime.mjs";
+import { cloudBackupConfigFromEnv } from "./backup-cloud.mjs";
 
 export async function writeBuildInfo(env = process.env, root = process.cwd()) {
   const apiUrl = publicHttpsOrigin(env.EXPO_PUBLIC_API_URL, "EXPO_PUBLIC_API_URL");
@@ -25,8 +26,11 @@ export async function checkProduction({ env = process.env, root = process.cwd(),
     if (env.EXPO_PUBLIC_WEB_URL && webUrl !== publicHttpsOrigin(env.EXPO_PUBLIC_WEB_URL, "EXPO_PUBLIC_WEB_URL")) errors.push("The built web URL differs from EXPO_PUBLIC_WEB_URL; rebuild the client.");
   } catch (error) { errors.push(`Production web export is missing or invalid: ${error.message}. Export with the production public URLs, then use preflight --write-build-info.`); }
   if (!env.RESEND_API_KEY || !env.MAIL_FROM) warnings.push("Password-reset email is unavailable. Configure a verified sender with RESEND_API_KEY and MAIL_FROM before relying on self-service recovery.");
+  try {
+    if (!cloudBackupConfigFromEnv(env)) warnings.push("Automatic offsite backups are disabled. Configure private storage and verify a remote restore before broader beta use.");
+  } catch (error) { errors.push(error.message); }
   if (runtime?.trustProxyHops === 0) warnings.push("TRUST_PROXY_HOPS=0 ignores forwarded IPs. Behind a proxy, clients may share rate limits; configure only after verifying the proxy topology.");
-  warnings.push("Confirm DATA_DIR/DB_PATH/MEDIA_DIR are actually on a persistent writable disk. One instance only; set up encrypted offsite backups and test a restore.");
+  warnings.push("Confirm DATA_DIR/DB_PATH/MEDIA_DIR are actually on a persistent writable disk. One instance only; monitor offsite backup status and verify remote restores.");
   warnings.push("This checks deployment configuration, not public DNS/TLS, policy accuracy, deliverability, device testing, app IDs, store declarations, or store approval.");
   return { ok: errors.length === 0, errors, warnings };
 }

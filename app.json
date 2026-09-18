@@ -2,6 +2,12 @@
   "expo": {
     "name": "Crewroom",
     "slug": "crewroom",
+    "owner": "geraldogs-team",
+    "extra": {
+      "eas": {
+        "projectId": "7e2b8c93-ce85-47b1-b0a5-ccf81c3d8d06"
+      }
+    },
     "scheme": "crewroom",
     "version": "0.3.0",
     "orientation": "portrait",

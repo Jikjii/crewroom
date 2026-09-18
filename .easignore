@@ -1,0 +1,47 @@
+# EAS uses this instead of .gitignore. Keep the common exclusions in sync.
+node_modules/
+.expo/
+.data/
+dist/
+dist-native/
+work/
+backups/
+*.sqlite
+*.sqlite-wal
+*.sqlite-shm
+.env*
+!.env.example
+.DS_Store
+*.log
+
+# Environment values are supplied by eas.json / EAS, never by local env files.
+.env.example
+.npmrc
+.git/
+.cache/
+coverage/
+
+# Local data and signing credentials must not enter the source upload.
+*.db
+*.db-wal
+*.db-shm
+*.backup
+credentials.json
+credentials/
+secrets/
+.secrets/
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.mobileprovision
+
+# The native app calls the hosted API; it does not include the server runtime.
+/server/
+/scripts/
+/tests/
+/Dockerfile
+/render.yaml

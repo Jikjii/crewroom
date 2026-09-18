@@ -1,6 +1,6 @@
 # Put the Crewroom beta online
 
-This package prepares one Node 24 service that serves the web app, API, and uploaded photos behind HTTPS. SQLite and photos stay on one persistent disk. Phones then connect to the hosted service without this computer being awake. No hosting account, service, DNS record, native build, or store release has been created by adding these files.
+Crewroom is live at https://joincrewroom.com on one Render Node 24 service serving the web app, API, and uploaded photos behind HTTPS. SQLite and photos stay on a 10 GB persistent disk. The operator confirmed phone access with the development computer asleep, and the account and uploaded photo survived a Render service restart. Native installation and store release are separate steps in [NATIVE-TESTING.md](NATIVE-TESTING.md).
 
 The supplied `render.yaml` is an optional concrete starting point: one paid Docker service (`1c-2g`) and a 10 GB disk at `/var/data`. Review the provider's current price and region before creating it. This design supports one instance; a database/storage migration comes before adding instances. Render documents its [Docker builds](https://render.com/docs/docker), [Blueprint fields](https://render.com/docs/blueprint-spec), and [persistent disk limits](https://render.com/docs/disks).
 
@@ -9,12 +9,12 @@ The supplied `render.yaml` is an optional concrete starting point: one paid Dock
 Confirmed with the operator on September 18, 2026:
 
 - Host: Render, one `1c-2g` service and a 10 GB persistent disk, with an approved base budget of approximately $27.50/month before taxes and usage overages.
-- Domain: `joincrewroom.com`, purchased through Porkbun. The selected web/API origin is `https://joincrewroom.com`; DNS/TLS deployment is still pending.
+- Domain: `joincrewroom.com`, purchased through Porkbun. The web/API origin is `https://joincrewroom.com`; DNS and TLS are active, with `www` redirecting to the primary domain.
 - Public operator: **Geraldo Grell**.
-- Support: **support@joincrewroom.com**. The operator confirmed that Porkbun forwarding works. This receives support mail; an outbound password-recovery sender still needs configuration.
+- Support: **support@joincrewroom.com**. Porkbun forwarding works. Resend is configured with a verified domain and restricted sending key; the operator completed a delivered password reset and signed in successfully.
 - Minimum age: **18+**.
 
-These public values are saved in `render.yaml` and the commented `.env.example`. They do not change local development or create a remote service. Policy approval remains pending; providing operator details does not approve the draft policies.
+These public values are saved in `render.yaml` and the commented `.env.example`. The operator approved the beta policy pages before deployment. Cloudflare R2 was selected for daily offsite backups; see [BACKUPS.md](BACKUPS.md) for configuration and verification. The backup code is prepared, but a successful live backup and restore drill must be recorded before treating offsite protection as active.
 
 ## Hosting configuration
 
@@ -41,7 +41,9 @@ Every `EXPO_PUBLIC_*` value is public. Never put mail credentials, service token
 
 The API intentionally refuses production startup without the public origin, real operator/contact, reviewed policy flag, persistent paths, and a matching production web export. Missing email delivery emits a prominent warning; it does not prevent a small beta, but self-service password recovery will be unavailable. A generic reset confirmation is not proof that an email was sent.
 
-## Deploy after choosing a host
+## Deployment procedure
+
+The existing private repository is `Jikjii/crewroom` and the Render service is `crewroom-beta` (`srv-damc8mp42hec738hb7mg`). Push reviewed changes, then manually deploy the latest commit in Render. Automatic deploys are disabled. The following also documents how to recreate the service:
 
 1. Put this app directory in the chosen private Git repository. Exclude `.data`, `.env*`, backups, local logs, credentials, and `node_modules`. The Docker context also excludes these. If this directory is nested in a larger repository, adjust `dockerContext` and `dockerfilePath` in `render.yaml` to its actual repository-relative path.
 2. For Render, create a Blueprint using `render.yaml`, review the paid service/disk configuration, and enter the real environment values above. Choose the actual hostname before the successful client build. Other Docker hosts can use the same Dockerfile and settings with their own HTTPS proxy and persistent-volume configuration.
@@ -50,7 +52,7 @@ The API intentionally refuses production startup without the public origin, real
 5. On the running host, run `node scripts/preflight.mjs`. Production startup runs these configuration checks too. Review every warning. Changing `EXPO_PUBLIC_*` values at runtime does not rewrite an existing bundle: rebuild/redeploy the web image and rebuild the native app whenever the compiled service URLs change.
 6. Complete the remote acceptance checks below before inviting people. The template disables automatic deploys so a future Git push does not immediately change this beta.
 
-This is deployment preparation, not a tested remote deployment. The host must still establish DNS/TLS and demonstrate that its disk survives restart/redeploy. An Expo development tunnel alone does not host the API or make local storage durable.
+The initial Render Docker deployment, HTTPS, password recovery, and persistence across a service restart have been verified. Check the acceptance list below for each release; these checks do not establish native-device or store readiness.
 
 ## Trusted HTTPS proxy and rate limits
 
@@ -83,7 +85,7 @@ docker build \
   -t crewroom-beta .
 ```
 
-The Docker daemon was not running in the preparation environment, so an image build has not been verified here. Runtime helper and backup/restore tests have run with real temporary SQLite databases.
+The initial image was built successfully by Render; a local Docker daemon was unavailable. Runtime helper and backup/restore tests use real temporary SQLite databases. New backup code still needs a successful provider deployment and R2 restore drill.
 
 ## Back up the database and photos together
 
@@ -97,7 +99,9 @@ node scripts/backup.mjs --to /var/data/backups/beta-before-next-release
 
 The tool reads `DATA_DIR`, or `DB_PATH` plus `MEDIA_DIR`; explicit `--db` and `--media` override them. Uploaded files are immutable. If a concurrent deletion removes a required photo before it is copied, the backup fails and removes only its newly created incomplete backup directory. Retry while writes are paused for a dependable snapshot. Success requires a manifest with SHA-256 checksums for the database and all referenced photos.
 
-A backup on the same disk is only a staging copy. The operator must copy successful backups to encrypted offsite storage, restrict access, and monitor backup failures. The supplied beta privacy page commits to expiring backup snapshots within **30 days**. Before approving that policy or inviting testers, put a documented operating procedure or storage lifecycle rule in place that expires every local and offsite copy within that period, including any provider snapshots under your control. Verify it regularly. These scripts do not create an offsite service, lifecycle rule, or automatic retention schedule.
+A backup on the same disk is only a staging copy. The daily R2 scheduler, upload verification, retention, and isolated restore drill are documented in [BACKUPS.md](BACKUPS.md). Configure its private bucket, scoped credentials, and independent seven-day lifecycle rule before enabling it. Monitor failures and confirm a real backup and restore drill. R2 encrypts stored objects and transfers use HTTPS; this setup does not add a separate client-side encryption key.
+
+The beta privacy page commits to expiring backup snapshots within **30 days**. Apply that limit to every manual, offsite, and provider-managed copy under your control. Render documents snapshots available for at least seven days, which is not a verified maximum; confirm the provider's maximum retention separately. Avoid accumulating manual snapshots on the persistent disk.
 
 Account deletion removes live records/files; an older point-in-time backup can retain them until expiry. After a disaster restore, replay account-deletion requests made since that snapshot before reopening access. Keep the minimum deletion reconciliation record needed for this purpose under restricted access and the published retention policy; never restore old accounts into active service without checking it.
 

@@ -28,7 +28,9 @@ async function regularFile(file) {
   return stat;
 }
 
-export async function createBackup({ dbPath, mediaDir, destination }) {
+export async function createBackup({ dbPath, mediaDir, destination, maxBytes }) {
+  if (maxBytes !== undefined && (!Number.isSafeInteger(maxBytes) || maxBytes < 1))
+    throw new Error("Backup maxBytes must be a positive safe integer.");
   dbPath = path.resolve(dbPath); mediaDir = path.resolve(mediaDir); destination = path.resolve(destination);
   if (destination === mediaDir || destination.startsWith(`${mediaDir}${path.sep}`) || dbPath.startsWith(`${destination}${path.sep}`))
     throw new Error("Choose a new backup directory separate from the live database and media.");
@@ -39,8 +41,13 @@ export async function createBackup({ dbPath, mediaDir, destination }) {
     const databaseFile = path.join(destination, "crewroom.sqlite");
     source = new DatabaseSync(dbPath, { readOnly: true });
     source.exec("PRAGMA busy_timeout=5000;");
-    await sqliteBackup(source, databaseFile);
+    const pageSize = Number(source.prepare("PRAGMA page_size").get().page_size);
+    const budget = (bytes) => { if (maxBytes !== undefined && bytes > maxBytes) throw new Error("Backup exceeds maxBytes."); };
+    budget(Number(source.prepare("PRAGMA page_count").get().page_count) * pageSize);
+    await sqliteBackup(source, databaseFile, { progress: ({ totalPages }) => budget(totalPages * pageSize) });
     source.close(); source = null;
+    let copiedBytes = (await regularFile(databaseFile)).size;
+    budget(copiedBytes);
     snapshot = new DatabaseSync(databaseFile, { readOnly: true });
     if (snapshot.prepare("PRAGMA quick_check").get().quick_check !== "ok") throw new Error("Database backup failed its integrity check.");
     const filenames = snapshotMediaFiles(snapshot);
@@ -50,10 +57,13 @@ export async function createBackup({ dbPath, mediaDir, destination }) {
     // Uploads are immutable. A concurrent deletion may make a source vanish; fail rather than label it a complete backup.
     for (const filename of filenames) {
       const sourceFile = path.join(mediaDir, filename);
-      await regularFile(sourceFile);
+      const sourceStat = await regularFile(sourceFile);
+      budget(copiedBytes + sourceStat.size);
       const target = path.join(destination, "media", filename);
       await copyFile(sourceFile, target, 1);
       const stat = await regularFile(target);
+      copiedBytes += stat.size;
+      budget(copiedBytes);
       media.push({ filename, bytes: stat.size, sha256: await sha256(target) });
     }
     const manifest = {

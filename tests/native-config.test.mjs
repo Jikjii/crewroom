@@ -38,14 +38,15 @@ function release(profile, overrides = {}, config = structuredClone(baseConfig)) 
     () => configure({ config }));
 }
 
-test("development remains usable without hosted URLs or native release identifiers", () => {
+test("development preserves the linked project without requiring hosted URLs or native release identifiers", () => {
   for (const profile of [undefined, "development"]) {
     const input = structuredClone(baseConfig);
     const result = withEnvironment({ EAS_BUILD_PROFILE: profile }, () => configure({ config: input }));
     assert.equal(result.name, "Crewroom");
     assert.equal(result.ios.bundleIdentifier, undefined);
     assert.equal(result.android.package, undefined);
-    assert.equal(result.extra?.eas?.projectId, undefined);
+    assert.equal(result.extra?.eas?.projectId, baseConfig.extra?.eas?.projectId);
+    assert.equal(result.owner, baseConfig.owner);
     assert.deepEqual(input, baseConfig, "configuration must not mutate app.json input");
   }
 });
@@ -60,9 +61,11 @@ test("both signed profiles require a final shared iOS and Android app identifier
 });
 
 test("both signed profiles require a syntactically valid linked Expo project UUID", () => {
+  const unlinkedConfig = structuredClone(baseConfig);
+  delete unlinkedConfig.extra?.eas?.projectId;
   for (const profile of ["preview", "production"]) {
     for (const projectId of [undefined, "", "your-project-id", "crewroom", "4c1f99d0-b9d2-4bc7-a7e9-f66a4eca571", "4c1f99d0-b9d2-4bc7-a7e9-f66a4eca571z"]) {
-      assert.throws(() => release(profile, { EAS_PROJECT_ID: projectId }), /project UUID/,
+      assert.throws(() => release(profile, { EAS_PROJECT_ID: projectId }, unlinkedConfig), /project UUID/,
         `${profile} should reject project UUID ${String(projectId)}`);
     }
   }

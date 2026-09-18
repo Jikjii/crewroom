@@ -5,12 +5,23 @@
       "distribution": "internal",
       "environment": "preview",
       "node": "24.13.0",
+      "autoIncrement": true,
+      "env": {
+        "CREWROOM_APP_ID": "com.joincrewroom.app",
+        "EXPO_PUBLIC_API_URL": "https://joincrewroom.com",
+        "EXPO_PUBLIC_WEB_URL": "https://joincrewroom.com"
+      },
       "android": { "buildType": "apk" }
     },
     "production": {
       "environment": "production",
       "node": "24.13.0",
       "autoIncrement": true,
+      "env": {
+        "CREWROOM_APP_ID": "com.joincrewroom.app",
+        "EXPO_PUBLIC_API_URL": "https://joincrewroom.com",
+        "EXPO_PUBLIC_WEB_URL": "https://joincrewroom.com"
+      },
       "android": { "buildType": "app-bundle" }
     }
   },
