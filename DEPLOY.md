@@ -14,7 +14,7 @@ Confirmed with the operator on September 18, 2026:
 - Support: **support@joincrewroom.com**. Porkbun forwarding works. Resend is configured with a verified domain and restricted sending key; the operator completed a delivered password reset and signed in successfully.
 - Minimum age: **18+**.
 
-These public values are saved in `render.yaml` and the commented `.env.example`. The operator approved the beta policy pages before deployment. Cloudflare R2 was selected for daily offsite backups; see [BACKUPS.md](BACKUPS.md) for configuration and verification. The backup code is prepared, but a successful live backup and restore drill must be recorded before treating offsite protection as active.
+These public values are saved in `render.yaml` and the commented `.env.example`. The operator approved the beta policy pages before deployment. Cloudflare R2 was selected for daily offsite backups; see [BACKUPS.md](BACKUPS.md) for configuration and verification. Backup code is deployed on Render in commit `9b32b89`, but R2 activation, runtime credentials, and a successful live backup and restore drill are still required before treating offsite protection as active.
 
 ## Hosting configuration
 
@@ -85,7 +85,7 @@ docker build \
   -t crewroom-beta .
 ```
 
-The initial image was built successfully by Render; a local Docker daemon was unavailable. Runtime helper and backup/restore tests use real temporary SQLite databases. New backup code still needs a successful provider deployment and R2 restore drill.
+The initial image was built successfully by Render; a local Docker daemon was unavailable. Runtime helper and backup/restore tests use real temporary SQLite databases. The backup update also deployed successfully on Render; the R2 connection and restore drill remain pending.
 
 ## Back up the database and photos together
 

@@ -1,6 +1,6 @@
 # Crewroom: installable phone beta
 
-Prepared September 18, 2026. No signed iPhone or Android build has been created yet. This guide updates the native-build steps in `RELEASE.md`; the live website and password recovery already work.
+Updated September 18, 2026. Android preview 0.3.0 (build 3) has been submitted to Expo; use the build link below for its current status and installation. Its Expo Doctor checks pass 21/21. No signed iPhone build has been created yet. The live website and password recovery work.
 
 ## What is ready
 
@@ -44,7 +44,11 @@ The two public HTTPS origins are already supplied in `eas.json`. `EAS_PROJECT_ID
 
 Local validation on September 18 resolved the preview configuration to the owner, UUID, platform identifiers, and HTTPS origins above. A source-copy check using the installed EAS CLI's archive implementation included the required mobile files and excluded local data, environment files, signing credentials, backups, and work files. It did not upload source or start a build.
 
-## 2. Make the Android build
+## 2. Install or rebuild Android
+
+Use [preview build 3](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/faaadd41-0526-4b87-ab4c-e04962cab939) when its status is Finished. Expo manages the Android signing key. Build 2 is superseded because its validation reported the missing direct `expo-font` dependency; build 3 includes the fix and passes all 21 Expo checks. The Expo dashboard showed the Free plan with 15 Android builds included before these two builds.
+
+To create a later preview:
 
 ```sh
 npx eas-cli@latest build --platform android --profile preview
@@ -89,5 +93,5 @@ Both preview builds use the live beta's accounts and data. Use disposable accoun
 
 | Platform | EAS build URL | Version/build | Device/OS | Installed | Acceptance |
 |---|---|---|---|---|---|
-| Android | Pending | Pending | Pending | Pending | Pending |
+| Android | [Build 3](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/faaadd41-0526-4b87-ab4c-e04962cab939) | 0.3.0 (3) | Pending | Pending | Pending |
 | iPhone | Pending | Pending | Pending | Pending | Pending |
