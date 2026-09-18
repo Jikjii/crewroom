@@ -2,7 +2,7 @@
 
 Crewroom's current source includes human review before real public profiles, posts, and comments become visible to others. This runbook describes that implementation; it does not establish that it is deployed, that a moderator is assigned, or that Apple has approved the beta. Confirm the deployed revision and complete the acceptance checks below before relying on the gate.
 
-The operator must assign someone to inspect submissions and reports regularly, handle urgent concerns promptly, and monitor **support@joincrewroom.com** for appeals. The owner has not yet confirmed a daily review commitment. Do not advertise a response deadline or round-the-clock coverage until the operation supports it. Apply the published [community standards](https://joincrewroom.com/community), including to costume imagery.
+The operator must assign someone to inspect submissions and reports regularly, handle urgent concerns promptly, and monitor **support@joincrewroom.com** for appeals. Geraldo Grell confirmed on September 18, 2026 that he will review pending public submissions and user reports daily during the small beta. Do not advertise a response deadline or round-the-clock coverage until the operation supports it. Apply the published [community standards](https://joincrewroom.com/community), including to costume imagery.
 
 ## What changes for creators
 

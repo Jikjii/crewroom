@@ -17,7 +17,7 @@ test('public text and images stay hidden until both profile and post are reviewe
   const media = await owner.upload();
   const post = await owner.post({ mediaIds: [media.id], reviewStatus: 'approved' });
   assert.equal(post.reviewStatus, 'pending', 'client cannot grant approval');
-  assert.equal((await stranger.request(`/api/social/profiles/${profile.userId}`)).status, 404);
+  assert.equal((await stranger.request(`/api/social/profiles/${profile.handle}`)).status, 404);
   assert.equal((await stranger.request(`/api/social/posts/${post.id}`)).status, 404);
   assert.equal((await stranger.request(media.url)).status, 404);
   assert.equal((await owner.request(media.url)).status, 200);
@@ -31,6 +31,7 @@ test('public text and images stay hidden until both profile and post are reviewe
   f.approve('post', post.id);
   assert.equal((await stranger.request(`/api/social/posts/${post.id}`)).status, 404, 'profile still pending');
   f.approve('profile', profile.userId);
+  assert.equal((await stranger.request(`/api/social/profiles/${profile.handle}`)).status, 200);
   assert.equal((await stranger.request(`/api/social/posts/${post.id}`)).status, 200);
   assert.equal((await stranger.request(media.url)).status, 200);
   const draft = await owner.post({ visibility: 'private' });
