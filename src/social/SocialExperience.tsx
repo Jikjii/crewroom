@@ -138,10 +138,19 @@ export default function SocialExperience({
     try {
       const me = await socialApi.getMe();
       if (current !== generation.current) return false;
-      if (me.visibility === "public") return true;
+      if (me.visibility === "public" && me.reviewStatus === "approved")
+        return true;
+      if (me.visibility === "public" && me.reviewStatus === "pending") {
+        notify(
+          "Your profile is awaiting review. Following, comments, and collaboration requests become available after approval.",
+        );
+        return false;
+      }
       setSheet({ type: "editProfile", profile: me });
       notify(
-        "Choose a public creator profile before connecting with other creators.",
+        me.reviewStatus === "rejected"
+          ? "Update your profile and submit it again for review before connecting."
+          : "Submit your creator profile for review before connecting with other creators.",
       );
       return false;
     } catch (e) {
@@ -363,7 +372,7 @@ export default function SocialExperience({
                 ? "Private draft saved."
                 : user.isDemo
                   ? "Demo preview saved. Only you can see it."
-                  : "Your work is published.",
+                  : "Work submitted for review. Only you can see it until approved.",
             );
           }}
         />
@@ -387,7 +396,7 @@ export default function SocialExperience({
               profile.visibility === "public"
                 ? user.isDemo
                   ? "Demo profile preview saved."
-                  : "Your creator profile is public."
+                  : "Profile submitted for review. Your profile and public content stay hidden until approved."
                 : "Your profile is private.",
             );
           }}

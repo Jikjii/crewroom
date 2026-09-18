@@ -7,6 +7,7 @@ import { DatabaseSync } from 'node:sqlite';
 import sharp from 'sharp';
 import { createApp } from '../server/app.mjs';
 import { createResendSender, releaseReadiness } from '../server/accounts.mjs';
+import { inspectContent, decideContent } from '../server/content-review.mjs';
 
 const PASSWORD = 'long-enough-old-password';
 const NEW_PASSWORD = 'long-enough-new-password';
@@ -34,6 +35,13 @@ async function fixture(t, options = {}) {
         if (body.user) state.user = body.user;
         if (Object.hasOwn(body, 'csrfToken')) state.csrf = body.csrfToken;
         if (response.headers.get('set-cookie')) state.cookie = response.headers.get('set-cookie').split(';')[0];
+        // Account-deletion scenarios use explicitly reviewed public fixtures.
+        if (response.ok && method !== 'GET' && body.reviewStatus === 'pending') inspect(db => {
+          const type = body.userId ? 'profile' : body.postId ? 'comment' : 'post';
+          const id = body.userId || body.id;
+          const item = inspectContent(db, type, id, config.mediaDir);
+          decideContent(db, { type, id, version: item.version, decision: 'approved', imagesReviewed: true, mediaDir: config.mediaDir });
+        });
         return { status: response.status, body, headers: response.headers };
       },
       async signup(name, policy = {}) { const response = await this.call('/api/auth/signup', 'POST', { name, email: `${name.toLowerCase()}@example.test`, password: PASSWORD, ...policy }); assert.equal(response.status, 201, JSON.stringify(response.body)); return response.body.user; },
@@ -164,6 +172,7 @@ test('account deletion transfers shared crews, preserves others work, removes fu
   f.inspect(db => {
     assert.deepEqual(db.prepare('PRAGMA foreign_key_check').all(), []);
     assert.equal(db.prepare('SELECT id FROM users WHERE id=?').get(ua.id), undefined);
+    assert.equal(db.prepare('SELECT id FROM social_content_reviews WHERE targetId=? OR targetId=?').get(ua.id, ownPost.id), undefined);
     assert.equal(db.prepare('SELECT id FROM projects WHERE id=?').get(soloProject.id), undefined);
     assert.equal(db.prepare('SELECT id FROM social_requests WHERE id=?').get(request.body.id), undefined);
     assert.equal(db.prepare('SELECT actorName FROM activity WHERE actorUserId=?').get(ua.id), undefined);

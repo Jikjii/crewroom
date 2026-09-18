@@ -1,4 +1,10 @@
 export type SocialVisibility = "public" | "private";
+export type ContentReviewStatus = "pending" | "approved" | "rejected";
+/** Review details are returned only to the owner of real public content. */
+export interface ContentReview {
+  reviewStatus?: ContentReviewStatus;
+  reviewReason?: string;
+}
 export type CreativeStage = "wip" | "finished" | "tutorial";
 export type CollaborationStatus =
   "pending" | "accepted" | "declined" | "cancelled";
@@ -6,7 +12,7 @@ export type CollaborationAction = "accept" | "decline" | "cancel";
 export type ReportTarget = "post" | "profile" | "comment";
 export type ReportReason = "harassment" | "stolen-work" | "spam" | "other";
 
-export interface CreatorProfile {
+export interface CreatorProfile extends ContentReview {
   userId: string;
   handle: string;
   displayName: string;
@@ -47,7 +53,7 @@ export interface Opportunity {
   date: string;
 }
 
-export interface CreativePost {
+export interface CreativePost extends ContentReview {
   id: string;
   author: CreatorProfile;
   title: string;
@@ -66,7 +72,7 @@ export interface CreativePost {
   isExample: boolean;
 }
 
-export interface CreativeComment {
+export interface CreativeComment extends ContentReview {
   id: string;
   postId: string;
   author: CreatorProfile;

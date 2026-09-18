@@ -13,7 +13,12 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { mediaSource } from "../api";
 import { Avatar, Button, Empty, Icon, IconButton, useUI } from "../ui";
-import type { CreativePost, CreativeStage, CreatorProfile } from "./types";
+import type {
+  ContentReview,
+  CreativePost,
+  CreativeStage,
+  CreatorProfile,
+} from "./types";
 import { useSocialStyles } from "./styles";
 
 export const stageName = (stage: CreativeStage) =>
@@ -26,6 +31,53 @@ export const messageOf = (error: unknown) =>
   error instanceof Error
     ? error.message
     : "Something went wrong. Please try again.";
+
+export const needsReview = (content: ContentReview) =>
+  content.reviewStatus === "pending" || content.reviewStatus === "rejected";
+
+export function ReviewNotice({
+  content,
+  subject,
+}: {
+  content: ContentReview;
+  subject: "profile" | "work" | "comment";
+}) {
+  const { C } = useUI();
+  const x = useSocialStyles();
+  if (!needsReview(content)) return null;
+  const rejected = content.reviewStatus === "rejected";
+  const name =
+    subject === "profile" ? "Profile" : subject === "work" ? "Work" : "Comment";
+  return (
+    <View style={x.soft}>
+      <View style={x.row}>
+        <Icon
+          name={rejected ? "alert-circle-outline" : "hourglass-outline"}
+          color={C.blue}
+          size={18}
+        />
+        <Text style={x.label}>
+          {name} {rejected ? "not approved" : "awaiting review"}
+        </Text>
+      </View>
+      <Text style={x.small}>
+        {subject === "profile"
+          ? "Your profile, public work, and comments stay hidden from other creators until your profile is approved. Your private crews are still available."
+          : `Only you can see this ${subject} until it’s approved.`}
+        {rejected
+          ? subject === "comment"
+            ? " Delete it and submit a revised comment."
+            : ` Edit your ${subject} and submit it again for review.`
+          : " Crewroom reviews public content before it appears to others."}
+      </Text>
+      {!!content.reviewReason && (
+        <Text style={[x.small, { color: C.ink }]}>
+          Review note: {content.reviewReason}
+        </Text>
+      )}
+    </View>
+  );
+}
 
 export function useResource<T>(
   loader: () => Promise<T>,
@@ -315,6 +367,20 @@ export function WorkCard({
           {post.visibility === "private" && (
             <View style={x.imageBadge}>
               <Text style={x.badgeText}>Private draft</Text>
+            </View>
+          )}
+          {post.visibility === "public" &&
+            (needsReview(post) || needsReview(post.author)) && (
+            <View style={x.imageBadge}>
+              <Text style={x.badgeText}>
+                {needsReview(post)
+                  ? post.reviewStatus === "rejected"
+                    ? "Not approved"
+                    : "Awaiting review"
+                  : post.author.reviewStatus === "rejected"
+                    ? "Profile not approved"
+                    : "Profile awaiting review"}
+              </Text>
             </View>
           )}
           {post.isExample && (

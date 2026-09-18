@@ -17,9 +17,11 @@ import type { CreativePost, CreatorProfile, ReportInput } from "./types";
 import {
   ErrorNotice,
   ProfileLink,
+  ReviewNotice,
   ToggleButton,
   Spinner,
   messageOf,
+  needsReview,
   stageName,
   useResource,
 } from "./shared";
@@ -72,6 +74,13 @@ export default function PostDetail({
   const post = resource.data?.post,
     comments = resource.data?.comments || [],
     own = !!user && post?.author.userId === user.id;
+  const reviewBlocked = !!post && (needsReview(post) || needsReview(post.author));
+  const shareable =
+    !!post &&
+    (post.isExample ||
+      (post.visibility === "public" &&
+        post.author.visibility === "public" &&
+        !user?.isDemo));
   const run = async (key: string, action: () => Promise<void>) => {
     if (lock.current) return;
     lock.current = true;
@@ -90,14 +99,19 @@ export default function PostDetail({
     if (!post || !comment.trim()) return;
     if (!(await ensurePublic())) return;
     await run("comment", async () => {
-      await socialApi.addComment(post.id, comment);
+      const saved = await socialApi.addComment(post.id, comment);
       setComment("");
       await resource.reload();
       onChanged();
+      notify(
+        saved.reviewStatus === "pending"
+          ? "Comment submitted for review. Only you can see it until approved."
+          : "Comment saved.",
+      );
     });
   };
   const share = async () => {
-    if (!post) return;
+    if (!post || !shareable || reviewBlocked) return;
     await run("share", async () => {
       const url = getPublicWebUrl(`/p/${encodeURIComponent(post.id)}`);
       if (Platform.OS === "web") {
@@ -121,11 +135,6 @@ export default function PostDetail({
     );
   const image =
     post.media[Math.min(selected, Math.max(0, post.media.length - 1))];
-  const shareable =
-    post.isExample ||
-    (post.visibility === "public" &&
-      post.author.visibility === "public" &&
-      !user?.isDemo);
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
@@ -150,6 +159,23 @@ export default function PostDetail({
         </Tag>
       </View>
       <ErrorNotice message={error || resource.error} />
+      {own && !user?.isDemo && (
+        <>
+          <ReviewNotice content={post} subject="work" />
+          {post.visibility === "public" && (
+            <ReviewNotice content={post.author} subject="profile" />
+          )}
+          {post.visibility === "public" && post.author.visibility === "private" && (
+            <View style={x.soft}>
+              <Text style={x.label}>Hidden by your private profile</Text>
+              <Text style={x.small}>
+                Only you can see this work. Submit your profile for public sharing
+                when you’re ready.
+              </Text>
+            </View>
+          )}
+        </>
+      )}
       {image ? (
         <View style={{ gap: 12 }}>
           <Image
@@ -235,10 +261,14 @@ export default function PostDetail({
         />
         {shareable && (
           <Button
-            title={Platform.OS === "web" ? "Copy public link" : "Share work"}
+            title={
+              reviewBlocked
+                ? "Share after approval"
+                : Platform.OS === "web" ? "Copy public link" : "Share work"
+            }
             secondary
             icon="share-outline"
-            disabled={!!busy}
+            disabled={!!busy || reviewBlocked}
             onPress={() => void share()}
           />
         )}
@@ -246,7 +276,7 @@ export default function PostDetail({
           <Button
             title={
               post.visibility === "private"
-                ? "Edit / publish draft"
+                ? "Edit / submit draft"
                 : "Edit work"
             }
             secondary
@@ -368,6 +398,12 @@ export default function PostDetail({
                 )}
               </View>
               <Text style={[x.body, { color: C.ink }]}>{item.body}</Text>
+              {user?.id === item.author.userId && (
+                <ReviewNotice
+                  content={needsReview(item) ? item : item.author}
+                  subject={needsReview(item) ? "comment" : "profile"}
+                />
+              )}
               <Text style={x.small}>
                 {new Date(item.createdAt).toLocaleDateString(undefined, {
                   month: "short",
@@ -385,10 +421,14 @@ export default function PostDetail({
               placeholder="What caught your eye?"
             />
             <Button
-              title={busy === "comment" ? "Posting…" : "Post comment"}
+              title={busy === "comment" ? "Submitting…" : "Submit comment for review"}
               disabled={!!busy || !comment.trim()}
               onPress={() => void addComment()}
             />
+            <Text style={x.small}>
+              Comments appear to others after review. You can see and delete your
+              own comment while it awaits approval.
+            </Text>
           </View>
         </View>
       )}

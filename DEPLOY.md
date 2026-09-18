@@ -124,9 +124,10 @@ Inspect the restored data, apply outstanding deletion requests, and test it befo
 
 - Open the public HTTPS URL from a phone on cellular with the development computer asleep. The gallery, account signup, and a real photo upload must work.
 - Confirm policy/support/deletion pages display the real operator and are reachable while signed out. Complete an actual deletion with a disposable account and verify its media is no longer available.
-- With two accounts, publish → discover → comment → request → accept → private crew. Confirm unrelated crews remain private and block/report controls work.
+- Apply [MODERATION.md](MODERATION.md) when deploying the content-review update. Its first migration queues existing real public profiles, posts, and comments; they stay hidden from others until individually inspected and approved. Private data is retained. Assign the reviewer and verify the gate on the actual deployed revision.
+- With two accounts, submit profile/work → operator approval → discover → submit comment → operator approval → request → accept → private crew. Confirm pending/rejected content and unrelated crews remain private, public edits queue again, and block/report controls work.
 - If email is configured, test a reset end to end, token expiry/reuse rejection, and delivery into a real mailbox. Do not print tokens or email API keys in logs.
 - Restart and redeploy the service, then check the same account, draft, uploaded photo, and crew still exist.
 - Make a backup, restore it into a separate empty test directory, and inspect both database content and photos. Record the date and result.
-- Check secure browser cookies, rate limits for two separate client connections, errors, disk capacity, and the manual report queue. Use `node server/moderate.mjs --db /var/data/crewroom.sqlite list` until the CLI is configured with the correct explicit database path.
+- Check secure browser cookies, rate limits for two separate client connections, errors, disk capacity, and both moderation queues. Use `node server/moderate.mjs --db /var/data/crewroom.sqlite queue` for pending public submissions and `node server/moderate.mjs --db /var/data/crewroom.sqlite list` for reports. Exact-version decisions and image-review requirements are in [MODERATION.md](MODERATION.md).
 - Complete the physical-device checklist with native preview builds configured for the hosted URLs. This hosting package does not establish iPhone/Android verification or App Store/Google Play readiness.

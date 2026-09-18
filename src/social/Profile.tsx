@@ -23,11 +23,13 @@ import type {
 import {
   AccountPrompt,
   ErrorNotice,
+  ReviewNotice,
   Sheet,
   Spinner,
   WorkGrid,
   ToggleButton,
   messageOf,
+  needsReview,
   useResource,
 } from "./shared";
 import { useSocialStyles } from "./styles";
@@ -111,6 +113,7 @@ export default function Profile({
       !profile ||
       lock.current ||
       profile.visibility !== "public" ||
+      needsReview(profile) ||
       (own && user?.isDemo)
     )
       return;
@@ -168,7 +171,7 @@ export default function Profile({
       {!user && !handle ? (
         <AccountPrompt
           title="Make a little space for your work"
-          text="Create a profile, keep private drafts, and publish only when you’re ready."
+          text="Create a profile, keep private drafts, and submit work for public sharing when you’re ready."
           onPress={onAccount}
         />
       ) : resource.loading && !profile ? (
@@ -192,11 +195,23 @@ export default function Profile({
                     <Tag tone="muted">Fictional example</Tag>
                   ) : own ? (
                     <Tag
-                      tone={profile.visibility === "public" ? "green" : "muted"}
+                      tone={
+                        needsReview(profile)
+                          ? "orange"
+                          : profile.visibility === "public" && !user?.isDemo
+                            ? "green"
+                            : "muted"
+                      }
                     >
-                      {profile.visibility === "public"
-                        ? "Public profile"
-                        : "Private profile"}
+                      {user?.isDemo
+                        ? "Demo profile"
+                        : needsReview(profile)
+                          ? profile.reviewStatus === "rejected"
+                            ? "Not approved"
+                            : "Awaiting review"
+                          : profile.visibility === "public"
+                            ? "Public profile"
+                            : "Private profile"}
                     </Tag>
                   ) : profile.openToCollab ? (
                     <Tag tone="green">Open to creating</Tag>
@@ -265,15 +280,17 @@ export default function Profile({
                     !(own && user?.isDemo) && (
                       <Button
                         title={
-                          Platform.OS === "web"
-                            ? copied
-                              ? "Profile link copied"
-                              : "Copy profile link"
-                            : "Share profile"
+                          needsReview(profile)
+                            ? "Share after approval"
+                            : Platform.OS === "web"
+                              ? copied
+                                ? "Profile link copied"
+                                : "Copy profile link"
+                              : "Share profile"
                         }
                         small
                         secondary
-                        disabled={busy}
+                        disabled={busy || needsReview(profile)}
                         icon="share-outline"
                         onPress={() => void shareProfile()}
                       />
@@ -326,12 +343,16 @@ export default function Profile({
                   </View>
                 )}
               </View>
+              {own && !user?.isDemo && (
+                <ReviewNotice content={profile} subject="profile" />
+              )}
               {own && profile.visibility === "private" && (
                 <View style={x.soft}>
                   <Text style={x.label}>A home before an audience</Text>
                   <Text style={x.small}>
                     Your profile and work are visible only to you. Edit your
-                    profile whenever you want to become discoverable.
+                    profile and submit it for review whenever you want to become
+                    discoverable.
                   </Text>
                 </View>
               )}
@@ -513,12 +534,14 @@ export function EditProfile({
           <Text style={x.label}>Choose how you want to connect</Text>
           <Text style={x.small}>
             Following, commenting, and collaboration requests use your public
-            creator identity. To connect, turn on “Make my profile public” below
-            and save. You can keep your profile private and still browse, save
+            creator identity. To connect, turn on “Submit my profile for public
+            sharing” below and submit it for review. Once approved, you can connect with other
+            creators. You can keep your profile private and still browse, save
             inspiration, and work on drafts.
           </Text>
         </View>
       )}
+      {!user.isDemo && <ReviewNotice content={profile} subject="profile" />}
       <Text style={x.body}>
         Use your cosplay identity. Your account email and private crew plans are
         never part of your public profile.
@@ -576,15 +599,19 @@ export function EditProfile({
       <View style={x.card}>
         <View style={x.toolbar}>
           <View style={x.grow}>
-            <Text style={x.label}>Make my profile public</Text>
+            <Text style={x.label}>
+              {user.isDemo ? "Preview a public profile" : "Submit my profile for public sharing"}
+            </Text>
             <Text style={x.small}>
               {user.isDemo
                 ? "Preview only: your demo stays visible to you."
-                : "Let anyone browse your profile and published work."}
+                : "After review, anyone can browse your profile and approved work."}
             </Text>
           </View>
           <Switch
-            accessibilityLabel="Make my profile public"
+            accessibilityLabel={
+              user.isDemo ? "Preview a public profile" : "Submit my profile for public sharing"
+            }
             value={visibility === "public"}
             onValueChange={(value) =>
               setVisibility(value ? "public" : "private")
@@ -595,9 +622,9 @@ export function EditProfile({
           />
         </View>
         <Text style={x.small}>
-          Your display name, bio, roles, interests, broad city, and links become
-          visible when public. Private drafts stay private. Making this profile
-          private hides previously published work too.
+          {user.isDemo
+            ? "Your profile stays inside your private demo."
+            : "Your display name, bio, roles, interests, broad city, and links become visible after approval. Editing a public profile sends it back for review and hides your profile, public work, and comments until approved again. Private drafts stay private. Making this profile private hides previously published work too."}
         </Text>
         <View style={x.divider} />
         <View style={x.toolbar}>
@@ -616,7 +643,11 @@ export function EditProfile({
         </View>
       </View>
       <Button
-        title={busy ? "Saving…" : "Save profile"}
+        title={
+          busy
+            ? visibility === "public" && !user.isDemo ? "Submitting…" : "Saving…"
+            : visibility === "public" && !user.isDemo ? "Submit profile for review" : "Save profile"
+        }
         disabled={busy}
         onPress={() => void save()}
       />

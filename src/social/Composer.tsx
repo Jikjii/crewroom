@@ -15,6 +15,7 @@ import type {
 import {
   Choice,
   ErrorNotice,
+  ReviewNotice,
   Sheet,
   Spinner,
   messageOf,
@@ -108,7 +109,7 @@ export default function Composer({
       return;
     }
     if (visibility === "public" && !media.length) {
-      setError("Add at least one image before publishing.");
+      setError("Add at least one image before submitting your work.");
       return;
     }
     if (
@@ -117,7 +118,7 @@ export default function Composer({
       !consent
     ) {
       setError(
-        "Choose to make your creator profile public, or save a private draft.",
+        "Choose to submit your creator profile for public sharing, or save a private draft.",
       );
       return;
     }
@@ -180,6 +181,7 @@ export default function Composer({
           </Text>
         </View>
       )}
+      {post && !user.isDemo && <ReviewNotice content={post} subject="work" />}
       <ErrorNotice message={error} />
       <View style={{ gap: 15 }}>
         {media.map((asset, index) => (
@@ -418,14 +420,14 @@ export default function Composer({
                   ? "Private draft"
                   : user.isDemo
                     ? "Preview a public post"
-                    : "Publish to your public profile"}
+                    : "Submit for public sharing"}
               </Text>
               <Text style={x.small}>
                 {value === "private"
                   ? "Only you. Take your time."
                   : user.isDemo
                     ? "Still visible only inside your private demo."
-                    : "Visible to anyone, including people without an account."}
+                    : "Only you until Crewroom approves your work and profile. Then anyone can view it."}
               </Text>
             </View>
             <Icon
@@ -437,6 +439,19 @@ export default function Composer({
           </Pressable>
         ))}
       </View>
+      {visibility === "public" && !user.isDemo && (
+        <View style={x.soft}>
+          <Text style={x.label}>Reviewed before it’s shared</Text>
+          <Text style={x.small}>
+            We review public photos, making notes, and credits before they appear
+            to others. Editing public work sends it back for review and hides it
+            until approved again. You can save a private draft at any time.
+          </Text>
+        </View>
+      )}
+      {visibility === "public" && !user.isDemo && profile.data && (
+        <ReviewNotice content={profile.data} subject="profile" />
+      )}
       {visibility === "public" && profile.data?.visibility !== "public" && (
         <Pressable
           accessibilityRole="checkbox"
@@ -449,7 +464,7 @@ export default function Composer({
           <Text style={[x.body, { flex: 1 }]}>
             {user.isDemo
               ? "Preview my creator profile as public within this demo."
-              : "Make my creator profile public too. My display name, bio, roles, links, and broad city will be visible. Private crew plans stay private."}
+              : "Submit my creator profile for public sharing too. After approval, my display name, bio, roles, links, and broad city will be visible. Private crew plans stay private."}
           </Text>
         </Pressable>
       )}
@@ -460,14 +475,16 @@ export default function Composer({
       <Button
         title={
           busy
-            ? "Saving…"
+            ? visibility === "public" && !user.isDemo
+              ? "Submitting…"
+              : "Saving…"
             : visibility === "private"
               ? "Save private draft"
               : user.isDemo
                 ? "Save demo preview"
                 : post
-                  ? "Save & publish changes"
-                  : "Publish my work"
+                  ? "Submit changes for review"
+                  : "Submit my work for review"
         }
         disabled={busy || uploading || profile.loading || !!profile.error}
         onPress={() => void save()}

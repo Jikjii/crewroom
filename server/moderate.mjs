@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { DatabaseSync } from "node:sqlite";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { contentReviewQueue, inspectContent, decideContent, reviewPacketHTML } from "./content-review.mjs";
 
 // Local operator tool only. There is deliberately no client-accessible admin endpoint.
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -22,7 +23,15 @@ if (dbFlag >= 0) {
   }
 }
 const [command, target, status] = args;
+function option(name) {
+  const index = args.indexOf(name);
+  return index < 0 ? undefined : args[index + 1];
+}
 const help = `Crewroom local moderation
+  node server/moderate.mjs queue
+  node server/moderate.mjs inspect [profile|post|comment] ID [--html /private/path/review.html]
+  node server/moderate.mjs approve [profile|post|comment] ID --version HASH [--images-reviewed]
+  node server/moderate.mjs reject [profile|post|comment] ID --version HASH --reason "Helpful explanation"
   node server/moderate.mjs list [all]
   node server/moderate.mjs review REPORT_ID [reviewed|dismissed]
   node server/moderate.mjs hide-post POST_ID
@@ -34,8 +43,13 @@ const help = `Crewroom local moderation
 list shows pending reports by default. review without a status displays the report
 and target; supplying a status records that review. Hiding a post or suspending a
 public profile does not delete private crews or account data. Changes affect new
-API requests immediately. Reports are handled manually; no automated review or
-response time is promised.`;
+API requests immediately. Public profiles, posts, and comments remain private to
+their author until manually approved. Inspect all text and image paths first;
+approval must include the matching fingerprint and an explicit assertion that
+every image was reviewed. An edit invalidates the fingerprint. Review reasons
+are shown only to the content author. Use MEDIA_DIR to override the image folder
+(default: media alongside the database). Reports and submissions are handled
+manually; no automated review or response time is promised.`;
 if (!command || command === "--help" || command === "help") {
   console.log(help);
   process.exit(0);
@@ -59,7 +73,23 @@ try {
     throw new Error(
       "Social schema is not initialized. Start the updated API first.",
     );
-  if (command === "list") {
+  if (["queue", "inspect", "approve", "reject"].includes(command)) {
+    if (!db.prepare("PRAGMA table_info(social_profiles)").all().some((row) => row.name === "reviewStatus"))
+      throw new Error("Review schema is not initialized. Start the updated API first.");
+    const mediaDir = process.env.MEDIA_DIR || path.join(path.dirname(path.resolve(dbPath)), "media");
+    const result = command === "queue" ? contentReviewQueue(db)
+      : command === "inspect" ? inspectContent(db, target, status, mediaDir)
+      : decideContent(db, { type: target, id: status, version: option("--version"),
+        decision: command === "approve" ? "approved" : "rejected", reason: option("--reason") || "",
+        imagesReviewed: args.includes("--images-reviewed"), mediaDir });
+    if (command === "inspect" && option("--html")) {
+      const output = path.resolve(option("--html"));
+      const publicRoots = [path.join(root, "dist"), process.env.STATIC_DIR, mediaDir].filter(Boolean).map(p => path.resolve(p));
+      if (publicRoots.some(p => output === p || output.startsWith(p + path.sep))) throw new Error("Review packets must stay outside public web/media folders.");
+      writeFileSync(output, reviewPacketHTML(result), { mode: 0o600, flag: 'wx' });
+      console.log(JSON.stringify({ type: result.type, id: result.id, version: result.version, privatePacket: output }));
+    } else console.log(JSON.stringify(result, null, 2));
+  } else if (command === "list") {
     const rows = db
       .prepare(
         `SELECT id,targetType,targetId,reason,details,status,createdAt,reviewedAt FROM social_reports ${target === "all" ? "" : "WHERE status='pending'"} ORDER BY createdAt,id`,

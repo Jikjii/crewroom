@@ -142,6 +142,7 @@ export function createAccounts({ db, get, all, run, insert, transaction, id, sta
       run(`DELETE FROM social_notifications WHERE userId=? OR actorId=? OR postId IN (${ownPosts}) OR requestId IN (${relatedRequests})`, user.id, user.id, user.id, user.id, user.id, user.id);
       run(`DELETE FROM social_requests WHERE id IN (${relatedRequests})`, user.id, user.id, user.id);
       run(`DELETE FROM social_reports WHERE reporterId=? OR (targetType='profile' AND targetId=?) OR (targetType='post' AND targetId IN (${ownPosts})) OR (targetType='comment' AND targetId IN (${ownComments}))`, user.id, user.id, user.id, user.id, user.id);
+      run(`DELETE FROM social_content_reviews WHERE (targetType='profile' AND targetId=?) OR (targetType='post' AND targetId IN (${ownPosts})) OR (targetType='comment' AND targetId IN (${ownComments}))`, user.id, user.id, user.id, user.id);
       run('DELETE FROM social_comments WHERE authorId=?', user.id);
       run('DELETE FROM social_posts WHERE authorId=?', user.id);
       run('DELETE FROM social_post_media WHERE mediaId IN (SELECT id FROM social_media WHERE ownerId=?)', user.id);

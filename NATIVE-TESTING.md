@@ -1,10 +1,10 @@
 # Crewroom: installable phone beta
 
-Updated September 18, 2026. Android preview 0.3.0 (build 3) has been submitted to Expo; use the build link below for its current status and installation. Its Expo Doctor checks pass 21/21. No signed iPhone build has been created yet. The live website and password recovery work.
+Updated September 18, 2026. Android preview 0.3.0 (build 3) and iPhone ad hoc preview 0.3.0 (build 1) are complete. The owner reported core iPhone installation, login, photo, dark-mode, persistence and cellular checks passed; Android physical testing is deferred. App Store distribution iPhone 0.3.0 (build 2) is complete and its TestFlight upload has been queued. This is a private TestFlight release, not a public App Store launch.
 
 ## What is ready
 
-- Crewroom 0.3.0 uses installed Expo SDK 57.0.23 and React Native 0.86.3.
+- Crewroom 0.3.0 uses installed Expo SDK 57.0.24 and React Native 0.86.3.
 - `preview` builds bundle the app and use `https://joincrewroom.com` for API requests, photos, and shared links. The computer and Metro do not need to remain on. An internet connection is still required.
 - Android preview produces an installable APK. iPhone preview uses an ad hoc build for registered devices. These are Expo's [internal distribution](https://docs.expo.dev/build/internal-distribution/) options.
 - Preview and production build numbers increment through EAS. The production profile produces the later store builds.
@@ -17,9 +17,9 @@ Updated September 18, 2026. Android preview 0.3.0 (build 3) has been submitted t
 |---|---|
 | Expo account | CLI authenticated as `geraldog`; project owner is `geraldogs-team`. |
 | Expo project | Linked to `@geraldogs-team/crewroom`, UUID `7e2b8c93-ce85-47b1-b0a5-ccf81c3d8d06`. |
-| App identifier | `com.joincrewroom.app` is configured for both platforms, based on the owned `joincrewroom.com` domain. Store registration has not been tested. |
-| Apple Developer Program | The owner does not yet have active paid membership. It is required for this iPhone ad hoc distribution route. Apple's listed fee is US$99 per year or local equivalent. |
-| Physical iPhone registration | Register before creating its first build. |
+| App identifier | `com.joincrewroom.app` is configured for both platforms, based on the owned `joincrewroom.com` domain. Registered with Apple team `A48T68DM6A`; App Store Connect app ID `6813563844`. |
+| Apple Developer Program | Active; renews September 18, 2027. |
+| Physical iPhone registration | One iPhone registered and preview build 1 tested. TestFlight does not use the ad hoc device list. |
 | Android test phone | No Google Play developer account is needed to install the preview APK directly. |
 
 Apple enrollment is completed by the account owner through the [Apple Developer Program](https://developer.apple.com/programs/enroll/). Expo build availability depends on the account's current [plan and quota](https://expo.dev/pricing); do not upgrade a plan just to complete configuration.
@@ -94,4 +94,17 @@ Both preview builds use the live beta's accounts and data. Use disposable accoun
 | Platform | EAS build URL | Version/build | Device/OS | Installed | Acceptance |
 |---|---|---|---|---|---|
 | Android | [Build 3](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/faaadd41-0526-4b87-ab4c-e04962cab939) | 0.3.0 (3) | Pending | Pending | Pending |
-| iPhone | Pending | Pending | Pending | Pending | Pending |
+| iPhone ad hoc | [Build 1](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/8ff22f27-f04c-4081-8c17-b275634bcabe) | 0.3.0 (1) | Not recorded | Yes, user-reported | Core checks passed, user-reported |
+| iPhone App Store distribution | [Build 2](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/7f3b3057-cb92-4bb5-8bc0-df46d1e1259d) | 0.3.0 (2) | Pending TestFlight | Pending | Build complete; upload queued |
+
+## Private TestFlight build 2
+
+Apple listing: **Crewroom: Cosplay & Crews** (the plain Crewroom name was unavailable); the installed name remains Crewroom. Build 2 uses the SDK 57 patch updates and owner-visible submission review states. Local Expo Doctor passed 21/21. The IPA targets iOS 16.4+, contains the live HTTPS origin and icon font, has an App Store profile with no device allowlist and no debug entitlement, and passed ZIP CRC checks. Its provisioning CMS signature was verified without independently evaluating Apple certificate-chain trust.
+
+Submission [c6757624](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/c6757624-2168-41b4-8975-bf591bf7e654) is queued with EAS. Upload completion, Apple processing, external beta review and tester invitations are separate remaining steps. `eas.json` records the real App Store Connect ID. For submission from Terminal, supply the app identifier because build-profile environment values are not automatically supplied to the submit command:
+
+```sh
+CREWROOM_APP_ID=com.joincrewroom.app EXPO_PUBLIC_API_URL=https://joincrewroom.com EXPO_PUBLIC_WEB_URL=https://joincrewroom.com npx eas-cli@latest submit --platform ios --profile production --id 7f3b3057-cb92-4bb5-8bc0-df46d1e1259d
+```
+
+Do not rerun a queued or successful submission. Expo holds an App Manager API key for EAS Submit; no credential was added to the repository. See [MODERATION.md](MODERATION.md) before opening external testing.

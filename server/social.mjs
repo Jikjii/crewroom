@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { mkdirSync, existsSync, createReadStream } from "node:fs";
 import { writeFile, unlink } from "node:fs/promises";
 import sharp from "sharp";
+import { migrateContentReview } from "./content-review.mjs";
 
 const EXAMPLES = new Set([
   "sky-portrait.png",
@@ -100,6 +101,7 @@ export function createSocial({
     CREATE INDEX IF NOT EXISTS social_notifications_user ON social_notifications(userId,createdAt);
     CREATE INDEX IF NOT EXISTS social_reports_target ON social_reports(reporterId,targetType,targetId);
   `);
+  migrateContentReview(db);
 
   function profileRow(userId) {
     return get(
@@ -157,6 +159,7 @@ export function createSocial({
       !profile.isDemo &&
       !profile.suspendedAt &&
       profile.visibility === "public" &&
+      profile.reviewStatus === "approved" &&
       !blocked(viewer?.id, profile.userId)
     );
   }
@@ -165,6 +168,7 @@ export function createSocial({
     if (viewer?.id === post.authorId) return true;
     if (
       post.visibility !== "public" ||
+      post.reviewStatus !== "approved" ||
       post.moderatedAt ||
       !profileVisible(profileRow(post.authorId), viewer)
     )
@@ -206,6 +210,8 @@ export function createSocial({
         403,
         "Make your creator profile public before contacting other creators.",
       );
+    if (publicIdentity && profile.reviewStatus !== "approved")
+      fail(403, "Your public creator profile needs review before interacting with other creators.");
     return profile;
   }
   function contactTarget(target, viewer) {
@@ -230,6 +236,8 @@ export function createSocial({
             actor &&
             !actor.isDemo &&
             !actor.suspendedAt &&
+            actor.visibility === "public" &&
+            actor.reviewStatus === "approved" &&
             !blocked(viewer?.id, actor.userId) &&
             !blocked(profile.userId, actor.userId)
           );
@@ -261,7 +269,13 @@ export function createSocial({
       ),
       followerCount: followers.length,
       projectCount: projects.length,
+      ...reviewJSON(profile, viewer, profile.userId),
     };
+  }
+  function reviewJSON(record, viewer, authorId) {
+    if (viewer?.id !== authorId || viewer.isDemo || record.isExample || record.visibility === "private") return {};
+    return { reviewStatus: record.reviewStatus,
+      ...(record.reviewReason ? { reviewReason: record.reviewReason } : {}) };
   }
   function mediaJSON(media, alt = media.alt) {
     return {
@@ -282,6 +296,7 @@ export function createSocial({
       const profile = profileRow(comment.authorId);
       return (
         profile &&
+        (comment.reviewStatus === "approved" || viewer?.id === comment.authorId) &&
         profileVisible(profile, viewer) &&
         !profile.suspendedAt &&
         (!profile.isDemo || viewer?.id === profile.userId) &&
@@ -328,6 +343,7 @@ export function createSocial({
       ),
       commentCount: post.isExample ? 0 : commentsFor(post.id, viewer).length,
       isExample: Boolean(post.isExample),
+      ...reviewJSON(post, viewer, post.authorId),
     };
   }
   function commentJSON(comment, viewer) {
@@ -337,6 +353,7 @@ export function createSocial({
       author: profileJSON(profileRow(comment.authorId), viewer),
       body: comment.body,
       createdAt: comment.createdAt,
+      ...reviewJSON(comment, viewer, comment.authorId),
     };
   }
   function requestVisible(request, viewer) {
@@ -356,6 +373,7 @@ export function createSocial({
       !recipient.isDemo &&
       !sender.suspendedAt &&
       !recipient.suspendedAt
+      && profileVisible(sender, viewer) && profileVisible(recipient, viewer)
     );
   }
   function requestJSON(request, viewer) {
@@ -396,6 +414,17 @@ export function createSocial({
       read: 0,
       createdAt: stamp(),
     });
+  }
+  function notificationText(notice) {
+    const name = notice.actorId ? profileRow(notice.actorId)?.displayName || "A creator" : "A creator";
+    const title = notice.postId ? get("SELECT title FROM social_posts WHERE id=?", notice.postId)?.title : null;
+    return {
+      follow: `${name} followed you`,
+      comment: `${name} commented on ${title || "your project"}`,
+      request: `${name} sent a collaboration request`,
+      accepted: `${name} accepted your collaboration request`,
+      declined: `${name} declined your collaboration request`,
+    }[notice.type] || "Network activity";
   }
   function bool(value, field) {
     if (typeof value !== "boolean")
@@ -471,6 +500,9 @@ export function createSocial({
       fields.openToCollab = bool(data.openToCollab, "openToCollab");
     if (!Object.keys(fields).length)
       fail(400, "No editable profile fields supplied.");
+    fields.reviewStatus = "pending";
+    fields.reviewReason = null;
+    fields.reviewedAt = null;
     fields.updatedAt = stamp();
     run(
       `UPDATE social_profiles SET ${Object.keys(fields)
@@ -614,11 +646,14 @@ export function createSocial({
     return transaction(() => {
       if (data.publishProfile === true)
         run(
-          "UPDATE social_profiles SET visibility='public',updatedAt=? WHERE userId=?",
+          "UPDATE social_profiles SET visibility='public',reviewStatus='pending',reviewReason=NULL,reviewedAt=NULL,updatedAt=? WHERE userId=? AND visibility<>'public'",
           stamp(),
           user.id,
         );
       const postId = previous?.id || id("post");
+      fields.reviewStatus = "pending";
+      fields.reviewReason = null;
+      fields.reviewedAt = null;
       if (previous) {
         fields.updatedAt = stamp();
         run(
@@ -728,6 +763,7 @@ export function createSocial({
         visibility: "public",
         openToCollab: 0,
         isExample: 1,
+        reviewStatus: "approved",
         suspendedAt: null,
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",
@@ -755,6 +791,7 @@ export function createSocial({
           '[{"name":"Crewroom example gallery","role":"AI-assisted concept illustration"}]',
         opportunity: null,
         isExample: 1,
+        reviewStatus: "approved",
         createdAt: `2026-01-0${examples.findIndex((item) => item[0] === key) + 1}T00:00:00.000Z`,
         updatedAt: stamp(),
         deletedAt: null,
@@ -1159,28 +1196,21 @@ export function createSocial({
     );
     if (addComment && req.method === "POST") {
       const data = await body(req);
-      const sender = realUser(user, true),
-        post = requirePost(addComment[1], user),
+      realUser(user, true);
+      const post = requirePost(addComment[1], user),
         target = profileRow(post.authorId);
       contactTarget(target, user);
       const text = string(data.body, "comment", { required: true, max: 2000 });
       const comment = transaction(() => {
-        const row = insert("social_comments", {
+        return insert("social_comments", {
           id: id("comment"),
           postId: post.id,
           authorId: user.id,
           body: text,
+          reviewStatus: "pending",
           createdAt: stamp(),
           deletedAt: null,
         });
-        notify(
-          post.authorId,
-          "comment",
-          user.id,
-          `${sender.displayName} commented on ${post.title}`,
-          post.id,
-        );
-        return row;
       });
       return respond(201, commentJSON(comment, user));
     }
@@ -1288,13 +1318,13 @@ export function createSocial({
     }
     const requestMatch = pathname.match(/^\/api\/social\/requests\/([^/]+)$/);
     if (requestMatch && req.method === "PATCH") {
-      const actor = realUser(user),
-        data = await body(req),
+      const data = await body(req),
         action = enumValue(
           data.action,
           ["accept", "decline", "cancel"],
           "request action",
         );
+      const actor = realUser(user, action !== "cancel");
       const request = get(
         "SELECT * FROM social_requests WHERE id=?",
         requestMatch[1],
@@ -1420,6 +1450,11 @@ export function createSocial({
             )
           )
             return false;
+          // Old comment notices have no provenance and are hidden. New notices
+          // are created only by approval and remain subject to current visibility.
+          if (notice.type === "comment" && (!notice.commentId || !commentsFor(notice.postId, user).some(
+            (comment) => comment.id === notice.commentId && comment.reviewStatus === "approved"
+          ))) return false;
           return true;
         })
         .map((notice) => ({
@@ -1428,7 +1463,7 @@ export function createSocial({
           actor: notice.actorId
             ? profileJSON(profileRow(notice.actorId), user)
             : null,
-          text: notice.text,
+          text: notificationText(notice, user),
           postId: notice.postId,
           requestId: notice.requestId,
           read: Boolean(notice.read),
@@ -1481,7 +1516,7 @@ export function createSocial({
           "SELECT * FROM social_comments WHERE id=? AND deletedAt IS NULL",
           targetId,
         );
-        if (!comment || blocked(user.id, comment.authorId))
+        if (!comment || !commentsFor(comment.postId, user).some((row) => row.id === comment.id))
           fail(404, "Comment not found.");
         requirePost(comment.postId, user);
       }
@@ -1514,7 +1549,9 @@ export function createSocial({
           )
             .map((row) => profileRow(row.blockedId))
             .filter(Boolean)
-            .map((profile) => profileJSON(profile, user)),
+            .map((profile) => profile.reviewStatus === "approved" && profile.visibility === "public"
+              ? profileJSON(profile, user)
+              : { userId: profile.userId, handle: "", displayName: "Unavailable creator", bio: "", roles: [], fandoms: [], city: "", websiteUrl: "", instagramUrl: "", visibility: "private", openToCollab: false, isExample: false, viewerFollowing: false, followerCount: 0, projectCount: 0 }),
         );
       if (req.method === "POST") {
         realUser(user);
