@@ -14,7 +14,7 @@ function httpsUrl(value) {
 /** Constructing this adapter never sends mail. Delivery happens only when called. */
 export function createResendSender({ apiKey, from, fetchImpl = globalThis.fetch } = {}) {
   if (!apiKey || !from) return undefined;
-  if (typeof apiKey !== 'string' || typeof from !== 'string' || /[\r\n]/.test(from)) throw new Error('Invalid reset mail configuration.');
+  if (typeof apiKey !== 'string' || typeof from !== 'string' || /[\r\n]/.test(from)) throw new Error('Invalid mail configuration.');
   return async ({ to, subject, text, html }) => {
     const response = await fetchImpl('https://api.resend.com/emails', {
       method: 'POST',
@@ -22,7 +22,7 @@ export function createResendSender({ apiKey, from, fetchImpl = globalThis.fetch 
       body: JSON.stringify({ from, to: [to], subject, text, html }),
       signal: AbortSignal.timeout(10_000),
     });
-    if (!response.ok) throw new Error('Password reset mail delivery failed.');
+    if (!response.ok) throw new Error('Mail delivery failed.');
   };
 }
 

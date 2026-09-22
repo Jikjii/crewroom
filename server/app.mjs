@@ -18,6 +18,7 @@ import {
 import path from "node:path";
 import { createSocial } from "./social.mjs";
 import { createAccounts, releaseReadiness } from "./accounts.mjs";
+import { createBeta, serveBetaPage } from "./beta.mjs";
 
 const derive = promisify(scrypt);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -629,6 +630,8 @@ export function createApp({
     mediaDir: resolvedMediaDir, appOrigin, logger, production, secureCookies, mailSender, operatorName, supportEmail, minimumAge, privacyPolicyUrl, termsUrl, policyVersion, requirePolicyAcceptance, policiesApproved, resetTokenTtlMs,
   });
   accounts.cleanupFiles().catch(() => logger.warn?.("Account media cleanup remains pending."));
+  const beta = createBeta({ db, get, all, run, transaction, id, now, digest, secret, fail, string, send, body, limited,
+    appOrigin, mailSender, supportEmail, minimumAge, production, logger });
   const server = http.createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
@@ -659,11 +662,13 @@ export function createApp({
       const url = new URL(req.url, "http://localhost"),
         pathname = url.pathname;
       if (!pathname.startsWith("/api/")) {
+        if (serveBetaPage(req, res, pathname)) return;
         if (serveStatic(req, res, pathname)) return;
         fail(404, "Not found.");
       }
       if (pathname === "/api/health" && req.method === "GET")
         return send(res, 200, { ok: true });
+      if (await beta(req, res, url)) return;
       const context = auth(req),
         { user } = context;
       if (await accounts(req, res, url, context)) return;
@@ -1156,6 +1161,6 @@ export function createApp({
   });
   server.requestTimeout = 30_000;
   server.headersTimeout = 15_000;
-  server.on("close", () => db.close());
+  server.on("close", () => { beta.close(); db.close(); });
   return server;
 }

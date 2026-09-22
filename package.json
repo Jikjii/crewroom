@@ -39,6 +39,7 @@
     "build:native": "expo export --platform ios --platform android --clear",
     "api": "node --env-file-if-exists=.env server/index.mjs",
     "moderate": "node --env-file-if-exists=.env server/moderate.mjs",
+    "beta:list": "node --env-file-if-exists=.env server/beta-list.mjs",
     "serve": "node --env-file-if-exists=.env server/index.mjs",
     "preflight": "node --env-file-if-exists=.env scripts/preflight.mjs",
     "backup": "node --env-file-if-exists=.env scripts/backup.mjs",
