@@ -174,6 +174,6 @@ export async function fixture(t, { approvePublic = false, ...options } = {}) {
       },
     };
   }
-  return { client, config, start, stop, directory, approve, inspect };
+  return { client, config, start, stop, directory, approve, inspect, get base() { return base; } };
 }
 

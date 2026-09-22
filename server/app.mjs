@@ -624,7 +624,7 @@ export function createApp({
   }
   const resolvedMediaDir = mediaDir || path.join(dbPath === ':memory:' ? path.resolve('.data') : path.dirname(path.resolve(dbPath)), 'media');
   const social = createSocial({ db, get, all, run, insert, transaction, id, stamp, now, fail, string, date, own, send, body, mutation, limited, addMember, activity,
-    mediaDir: resolvedMediaDir,
+    mediaDir: resolvedMediaDir, dbPath,
   });
   const accounts = createAccounts({ db, get, all, run, insert, transaction, id, stamp, now, fail, string, send, body, mutation, limited, cookie, derive, digest, secret, timingSafeEqual,
     mediaDir: resolvedMediaDir, appOrigin, logger, production, secureCookies, mailSender, operatorName, supportEmail, minimumAge, privacyPolicyUrl, termsUrl, policyVersion, requirePolicyAcceptance, policiesApproved, resetTokenTtlMs,
@@ -1159,7 +1159,8 @@ export function createApp({
       });
     }
   });
-  server.requestTimeout = 30_000;
+  // Mobile video bodies are streamed with their own 120-second and 50 MB bounds.
+  server.requestTimeout = 125_000;
   server.headersTimeout = 15_000;
   server.on("close", () => { beta.close(); db.close(); });
   return server;

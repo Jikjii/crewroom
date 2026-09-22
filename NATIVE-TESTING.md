@@ -1,5 +1,7 @@
 # Crewroom: installable phone beta
 
+For the September 22 native video update, follow [VIDEO-BETA.md](VIDEO-BETA.md). Its camera, microphone, video upload/playback, moderation, and device checks supersede the photo-only scope below. The results below are historical and do not establish that the new video build has passed physical testing.
+
 Updated September 18, 2026. Android preview 0.3.0 (build 3) and iPhone ad hoc preview 0.3.0 (build 1) are complete. The owner reported core iPhone installation, login, photo, dark-mode, persistence and cellular checks passed; Android physical testing is deferred. App Store distribution iPhone 0.3.0 (build 2) is uploaded and processed. At 12:26 PM EDT, Apple showed **Waiting for Review** in **Crewroom Private Beta**. Three external testers are added with automatic notification configured; they still show **No Builds Available** pending Apple approval. This is a private TestFlight release, not a public App Store launch.
 
 ## What is ready

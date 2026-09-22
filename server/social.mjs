@@ -4,6 +4,7 @@ import { mkdirSync, existsSync, createReadStream } from "node:fs";
 import { writeFile, unlink } from "node:fs/promises";
 import sharp from "sharp";
 import { migrateContentReview } from "./content-review.mjs";
+import { createVideoProcessor, streamVideo, VIDEO_MAX_BYTES, VIDEO_MAX_DURATION } from "./video.mjs";
 
 const EXAMPLES = new Set([
   "sky-portrait.png",
@@ -38,6 +39,7 @@ export function createSocial({
   addMember,
   activity,
   mediaDir,
+  dbPath,
 }) {
   mkdirSync(mediaDir, { recursive: true });
   db.exec(`
@@ -101,6 +103,12 @@ export function createSocial({
     CREATE INDEX IF NOT EXISTS social_notifications_user ON social_notifications(userId,createdAt);
     CREATE INDEX IF NOT EXISTS social_reports_target ON social_reports(reporterId,targetType,targetId);
   `);
+  // Additive migration retains existing image records and older clients.
+  const mediaColumns = new Set(db.prepare("PRAGMA table_info(social_media)").all().map(row => row.name));
+  if (!mediaColumns.has("kind")) db.exec("ALTER TABLE social_media ADD COLUMN kind TEXT NOT NULL DEFAULT 'image'");
+  if (!mediaColumns.has("duration")) db.exec("ALTER TABLE social_media ADD COLUMN duration REAL");
+  if (!mediaColumns.has("posterFilename")) db.exec("ALTER TABLE social_media ADD COLUMN posterFilename TEXT");
+  const videoProcessor = createVideoProcessor({ mediaDir, dbPath });
   migrateContentReview(db);
 
   function profileRow(userId) {
@@ -283,6 +291,8 @@ export function createSocial({
       url: media.exampleFilename
         ? `/api/social/examples/${media.exampleFilename}`
         : `/api/social/media/${media.id}`,
+      kind: media.kind || "image",
+      ...(media.kind === "video" ? { duration: media.duration, posterUrl: `/api/social/media/${media.id}/poster` } : {}),
       width: media.width,
       height: media.height,
       alt,
@@ -584,12 +594,12 @@ export function createSocial({
     let mediaIds;
     if (!previous || own(data, "mediaIds")) {
       if (!Array.isArray(data.mediaIds) || data.mediaIds.length > 4)
-        fail(400, "mediaIds must contain up to four uploaded images.");
+        fail(400, "mediaIds must contain up to four photos or one video.");
       mediaIds = data.mediaIds.map((value) =>
         string(value, "mediaId", { required: true, max: 100 }),
       );
       if (new Set(mediaIds).size !== mediaIds.length)
-        fail(400, "Each image may only appear once in a project.");
+        fail(400, "Each media item may only appear once in a project.");
       for (const mediaId of mediaIds)
         if (
           !get(
@@ -598,21 +608,24 @@ export function createSocial({
             user.id,
           )
         )
-          fail(400, "Use images uploaded by your own account.");
+          fail(400, "Use media uploaded by your own account.");
     } else
       mediaIds = all(
         "SELECT mediaId FROM social_post_media WHERE postId=? ORDER BY position",
         previous.id,
       ).map((item) => item.mediaId);
+    const videoCount = mediaIds.filter(mediaId => get("SELECT kind FROM social_media WHERE id=?", mediaId)?.kind === "video").length;
+    if (videoCount && (videoCount !== 1 || mediaIds.length !== 1))
+      fail(400, "Share one video or up to four photos in each project; do not mix them.");
     let alts;
     if (own(data, "mediaAlts")) {
       if (
         !Array.isArray(data.mediaAlts) ||
         data.mediaAlts.length !== mediaIds.length
       )
-        fail(400, "Provide one alt description for each image.");
+        fail(400, "Provide one alt description for each media item.");
       alts = data.mediaAlts.map((value) =>
-        string(value, "image alt", { max: 500 }),
+        string(value, "media alt", { max: 500 }),
       );
     } else
       alts = mediaIds.map((mediaId) =>
@@ -626,7 +639,7 @@ export function createSocial({
       );
     if ((result.visibility ?? previous?.visibility) === "public") {
       if (!mediaIds.length)
-        fail(400, "A public project needs at least one image.");
+        fail(400, "A public project needs photos or a video.");
       const profile = ensureProfile(user);
       if (profile.suspendedAt)
         fail(403, "This profile cannot publish to the public network.");
@@ -814,8 +827,8 @@ export function createSocial({
       mutation(req, context);
       limited(
         req,
-        `social:${user.id}:${pathname === "/api/social/media" ? "upload" : "interaction"}`,
-        pathname === "/api/social/media" ? 40 : 150,
+        `social:${user.id}:${["/api/social/media", "/api/social/videos"].includes(pathname) ? "upload" : "interaction"}`,
+        ["/api/social/media", "/api/social/videos"].includes(pathname) ? 40 : 150,
       );
     }
     const respond = (status, value) => {
@@ -882,6 +895,12 @@ export function createSocial({
         profiles.slice(0, 100).map((profile) => profileJSON(profile, user)),
       );
     }
+    const requestedMediaType = () => enumValue(url.searchParams.get("mediaType") || "image", ["image", "video", "all"], "media type");
+    const matchesMediaType = (post, type) => {
+      if (type === "all") return true;
+      const hasVideo = Boolean(get("SELECT 1 FROM social_post_media pm JOIN social_media m ON m.id=pm.mediaId WHERE pm.postId=? AND m.kind='video'", post.id));
+      return type === "video" ? hasVideo : !hasVideo;
+    };
     const profileMatch = pathname.match(/^\/api\/social\/profiles\/([^/]+)$/);
     if (profileMatch && req.method === "GET") {
       let handle;
@@ -897,15 +916,17 @@ export function createSocial({
         profile = raw ? profileRow(raw.userId) : null;
       if (!profileVisible(profile, user))
         fail(404, "This creator is not available.");
+      const mediaType = requestedMediaType();
       const posts = all(
         "SELECT * FROM social_posts WHERE authorId=? ORDER BY createdAt DESC,id DESC",
         profile.userId,
       )
-        .filter((post) => postVisible(post, user))
+        .filter((post) => postVisible(post, user) && matchesMediaType(post, mediaType))
         .map((post) => postJSON(post, user));
       return respond(200, { profile: profileJSON(profile, user), posts });
     }
     if (pathname === "/api/social/feed" && req.method === "GET") {
+      const mediaType = requestedMediaType();
       const mode = enumValue(
         url.searchParams.get("mode") || "discover",
         ["discover", "following", "saved"],
@@ -940,6 +961,7 @@ export function createSocial({
       ).filter((post) => {
         if (
           !postVisible(post, user) ||
+          !matchesMediaType(post, mediaType) ||
           (stage && stage !== post.stage) ||
           (openRoles && !post.opportunity)
         )
@@ -989,6 +1011,31 @@ export function createSocial({
               ).toString("base64url")
             : null,
       });
+    }
+    if (pathname === "/api/social/video-config" && req.method === "GET")
+      return respond(200, { enabled: await videoProcessor.available(), maxBytes: VIDEO_MAX_BYTES, maxDuration: VIDEO_MAX_DURATION });
+    if (pathname === "/api/social/videos" && req.method === "POST") {
+      requireUser();
+      realUser(user);
+      const mediaId = id("media"), controller = new AbortController();
+      const cancel = () => controller.abort();
+      res.once("close", cancel);
+      let encoded;
+      try {
+        encoded = await videoProcessor.upload(req, mediaDir, mediaId, controller.signal);
+        // Sessions/accounts can be removed while the asynchronous transcode runs.
+        const current = get("SELECT * FROM users WHERE id=?", user.id);
+        if (!current || !get("SELECT 1 FROM sessions WHERE tokenHash=? AND userId=? AND expiresAt>?", context.session?.tokenHash || "", user.id, now()))
+          fail(401, "Sign in again before uploading.");
+        realUser(current);
+        const media = insert("social_media", { id: mediaId, ownerId: user.id, ...encoded,
+          kind: "video", alt: "", exampleFilename: null, createdAt: stamp() });
+        return respond(201, mediaJSON(media));
+      } catch (error) {
+        if (encoded) await Promise.all([encoded.filename, encoded.posterFilename].map(filename => unlink(path.join(mediaDir, filename)).catch(() => {})));
+        if (error.status) fail(error.status, error.message);
+        throw error;
+      } finally { res.removeListener("close", cancel); }
     }
     if (pathname === "/api/social/media" && req.method === "POST") {
       requireUser();
@@ -1062,13 +1109,13 @@ export function createSocial({
         throw error;
       }
     }
-    const mediaMatch = pathname.match(/^\/api\/social\/media\/([^/]+)$/);
+    const mediaMatch = pathname.match(/^\/api\/social\/media\/([^/]+)(\/poster)?$/);
     if (mediaMatch && ["GET", "HEAD"].includes(req.method)) {
       const media = get(
         "SELECT * FROM social_media WHERE id=? AND exampleFilename IS NULL",
         mediaMatch[1],
       );
-      if (!media) fail(404, "Image not found.");
+      if (!media || (mediaMatch[2] && (media.kind !== "video" || !media.posterFilename))) fail(404, "Media not found.");
       const attachments = all(
         "SELECT p.* FROM social_posts p JOIN social_post_media pm ON pm.postId=p.id WHERE pm.mediaId=?",
         media.id,
@@ -1081,8 +1128,13 @@ export function createSocial({
         !(media.ownerId === user?.id && attachments.length === 0)
       )
         fail(404, "Image not found.");
-      const file = path.join(mediaDir, media.filename);
-      if (!existsSync(file)) fail(404, "Image not found.");
+      const file = path.join(mediaDir, mediaMatch[2] ? media.posterFilename : media.filename);
+      if (!existsSync(file)) fail(404, "Media not found.");
+      if (media.kind === "video" && !mediaMatch[2]) {
+        try { await streamVideo(req, res, file); }
+        catch (error) { if (error.code === "ENOENT") fail(404, "Media not found."); throw error; }
+        return true;
+      }
       res.writeHead(200, {
         "Content-Type": "image/jpeg",
         "Cache-Control": "private, no-store",

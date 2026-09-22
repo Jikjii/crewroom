@@ -31,6 +31,10 @@ export interface CreatorProfile extends ContentReview {
 }
 
 export interface MediaAsset {
+  /** Missing on older photo-only servers. */
+  kind?: "image" | "video";
+  duration?: number;
+  posterUrl?: string;
   id: string;
   /** API-relative URL; unattached/private media requires owner authorization. */
   url: string;
@@ -155,6 +159,7 @@ export interface UpdateProfileInput {
 }
 
 export interface FeedOptions {
+  mediaType?: "image" | "video" | "all";
   mode?: "discover" | "following" | "saved";
   q?: string;
   stage?: CreativeStage;

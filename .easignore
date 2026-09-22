@@ -17,7 +17,7 @@ backups/
 # Environment values are supplied by eas.json / EAS, never by local env files.
 .env.example
 .npmrc
-.git/
+.git
 .cache/
 coverage/
 

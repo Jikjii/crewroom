@@ -14,6 +14,7 @@ RUN node --input-type=module -e 'import { writeFileSync } from "node:fs"; writeF
 RUN npm prune --omit=dev --no-audit --no-fund
 
 FROM node:24-bookworm-slim AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=10000 DATA_DIR=/var/data
 COPY --from=build --chown=node:node /app/package.json /app/package-lock.json ./

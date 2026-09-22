@@ -26,7 +26,7 @@ import { messageOf } from "./shared";
 import { useSocialStyles } from "./styles";
 
 type Route = { type: "post" | "profile"; value: string };
-type Tab = "discover" | "saved" | "inbox" | "profile";
+type Tab = "discover" | "explore" | "saved" | "inbox" | "profile";
 type SheetState =
   | { type: "compose"; post?: CreativePost }
   | { type: "editProfile"; profile: CreatorProfile }
@@ -36,6 +36,7 @@ type SheetState =
   | { type: "settings" }
   | null;
 interface Props {
+  playbackSuspended?: boolean;
   user: User | null;
   onRequireAccount: () => void;
   onOpenProject: (projectId: string) => void;
@@ -46,6 +47,7 @@ interface Props {
 }
 
 export default function SocialExperience({
+  playbackSuspended = false,
   user,
   onRequireAccount,
   onOpenProject,
@@ -59,6 +61,9 @@ export default function SocialExperience({
   const { width } = useWindowDimensions(),
     insets = useSafeAreaInsets(),
     wide = width >= 820;
+  const [homeMode, setHomeMode] = useState<"discover" | "following">(
+    "discover",
+  );
   const [tab, setTab] = useState<Tab>("discover"),
     [routes, setRoutes] = useState<Route[]>([]),
     [sheet, setSheet] = useState<SheetState>(null),
@@ -158,7 +163,7 @@ export default function SocialExperience({
       return false;
     }
   };
-  const save = async (post: CreativePost) => {
+  const save = async (post: CreativePost, surfaceError = false) => {
     if (
       !user ||
       (user.isDemo && !post.isExample && post.author.userId !== user.id)
@@ -177,7 +182,10 @@ export default function SocialExperience({
           : "Saved to your private collection.",
       );
     } catch (e) {
-      if (current === generation.current) notify(messageOf(e));
+      if (current === generation.current) {
+        if (surfaceError) throw e;
+        notify(messageOf(e));
+      }
     }
   };
   const request = async (profile: CreatorProfile, post?: CreativePost) => {
@@ -213,10 +221,10 @@ export default function SocialExperience({
     onChanged: changed,
   };
   const navItems = [
-    { key: "discover", label: "Discover", icon: "compass-outline" },
-    { key: "saved", label: "Saved", icon: "bookmark-outline" },
+    { key: "discover", label: "Home", icon: "home-outline" },
+    { key: "explore", label: "Explore", icon: "search-outline" },
     { key: "create", label: "Create", icon: "add" },
-    { key: "inbox", label: "Inbox", icon: "chatbubbles-outline" },
+    { key: "inbox", label: "Inbox", icon: "notifications-outline" },
     { key: "profile", label: "Profile", icon: "person-outline" },
   ] as const;
   return (
@@ -234,14 +242,9 @@ export default function SocialExperience({
             <Icon name="arrow-back" size={20} />
             <Text style={x.label}>Back</Text>
           </Pressable>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenCrews}
-            style={[x.row, { minHeight: 44 }]}
-          >
-            <Text style={x.link}>My crews</Text>
-            <Icon name="arrow-forward" size={16} color={C.blue} />
-          </Pressable>
+          <Text style={[x.label, { color: C.muted }]}>
+            {route.type === "post" ? "Build showcase" : "Creator profile"}
+          </Text>
         </View>
       )}
       <View style={{ flex: 1 }}>
@@ -249,6 +252,7 @@ export default function SocialExperience({
           <PostDetail
             key={`${route.value}:${user?.id || "anonymous"}`}
             id={route.value}
+            playbackSuspended={playbackSuspended || !!sheet}
             user={user}
             wide={wide}
             revision={revision}
@@ -287,7 +291,16 @@ export default function SocialExperience({
           <Discover
             key={tab}
             user={user}
+            playbackSuspended={playbackSuspended || !!sheet}
             saved={tab === "saved"}
+            explore={tab === "explore"}
+            onSaved={() => navigate("saved")}
+            initialMode={tab === "explore" ? "discover" : homeMode}
+            onHome={(mode) => {
+              setHomeMode(mode);
+              navigate("discover");
+            }}
+            onFocusSave={(post) => save(post, true)}
             wide={wide}
             revision={revision}
             onAccount={onRequireAccount}
@@ -310,14 +323,24 @@ export default function SocialExperience({
             accessibilityLabel={
               item.key === "create" ? "Create a project post" : item.label
             }
-            accessibilityState={{ selected: !route && tab === item.key }}
+            accessibilityState={{
+              selected:
+                !route && (tab === "saved" ? "discover" : tab) === item.key,
+            }}
             aria-selected={
-              item.key === "create" ? undefined : !route && tab === item.key
+              item.key === "create"
+                ? undefined
+                : !route && (tab === "saved" ? "discover" : tab) === item.key
             }
             onPress={() =>
               item.key === "create" ? create() : navigate(item.key)
             }
-            style={[x.navItem, !route && tab === item.key && x.navActive]}
+            style={[
+              x.navItem,
+              !route &&
+                (tab === "saved" ? "discover" : tab) === item.key &&
+                x.navActive,
+            ]}
           >
             {item.key === "create" ? (
               <View style={x.createNav}>
@@ -326,14 +349,21 @@ export default function SocialExperience({
             ) : (
               <Icon
                 name={item.icon}
-                color={!route && tab === item.key ? C.blue : C.muted}
-                size={22}
+                color={
+                  !route && (tab === "saved" ? "discover" : tab) === item.key
+                    ? C.blue
+                    : C.muted
+                }
+                size={25}
               />
             )}
             <Text
               style={[
                 x.navLabel,
-                !route && tab === item.key && { color: C.blue },
+                !route &&
+                  (tab === "saved" ? "discover" : tab) === item.key && {
+                    color: C.ink,
+                  },
               ]}
             >
               {item.label}
@@ -446,7 +476,14 @@ export default function SocialExperience({
       )}
       {sheet?.type === "settings" && (
         <SettingsSheet
-          onAccountSettings={onAccountSettings ? () => { setSheet(null); onAccountSettings(); } : undefined}
+          onAccountSettings={
+            onAccountSettings
+              ? () => {
+                  setSheet(null);
+                  onAccountSettings();
+                }
+              : undefined
+          }
           onClose={() => setSheet(null)}
           onChanged={changed}
           notify={notify}

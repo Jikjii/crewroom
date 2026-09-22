@@ -17,7 +17,10 @@ export function safeMediaFilename(filename) {
 
 export function snapshotMediaFiles(db) {
   if (!db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='social_media'").get()) return [];
-  const files = db.prepare("SELECT DISTINCT filename FROM social_media WHERE (exampleFilename IS NULL OR exampleFilename='') AND filename<>'' ORDER BY filename").all().map((row) => row.filename);
+  // Restores must also accept snapshots from before video posters were added.
+  const hasPoster = db.prepare("PRAGMA table_info(social_media)").all().some((column) => column.name === "posterFilename");
+  const sources = ["filename", ...(hasPoster ? ["posterFilename"] : [])];
+  const files = db.prepare(sources.map((column) => `SELECT ${column} AS filename FROM social_media WHERE (exampleFilename IS NULL OR exampleFilename='') AND ${column} IS NOT NULL AND ${column}<>''`).join(" UNION ") + " ORDER BY filename").all().map((row) => row.filename);
   if (files.some((filename) => !safeMediaFilename(filename))) throw new Error("Database contains an unsafe media filename; backup aborted.");
   return files;
 }
@@ -101,6 +104,6 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const dbPath = args["--db"] || process.env.DB_PATH || path.join(process.env.DATA_DIR || path.join(root, ".data"), "crewroom.sqlite");
     const mediaDir = args["--media"] || process.env.MEDIA_DIR || path.join(process.env.DATA_DIR || path.dirname(dbPath), "media");
     const result = await createBackup({ dbPath, mediaDir, destination: args["--to"] });
-    console.log(`Backup complete: ${path.resolve(args["--to"])} (${result.media.length} uploaded photos). Copy it to encrypted offsite storage; this command does not do that.`);
+    console.log(`Backup complete: ${path.resolve(args["--to"])} (${result.media.length} media files). Copy it to encrypted offsite storage; this command does not do that.`);
   } catch (error) { console.error(`Backup failed: ${error.message}`); process.exitCode = 1; }
 }

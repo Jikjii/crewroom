@@ -105,7 +105,7 @@ export function createAccounts({ db, get, all, run, insert, transaction, id, sta
   }
   async function cleanupFiles() {
     for (const file of all('SELECT filename FROM account_file_deletions')) {
-      if (!/^media_[a-f0-9-]+\.jpg$/i.test(file.filename)) { logger.warn?.('Account media cleanup skipped an invalid stored filename.'); continue; }
+      if (!/^media_[a-f0-9-]+(?:-poster)?\.(?:jpg|mp4)$/i.test(file.filename)) { logger.warn?.('Account media cleanup skipped an invalid stored filename.'); continue; }
       try { await unlink(path.join(mediaDir, file.filename)); run('DELETE FROM account_file_deletions WHERE filename=?', file.filename); }
       catch (error) {
         if (error.code === 'ENOENT') run('DELETE FROM account_file_deletions WHERE filename=?', file.filename);
@@ -146,8 +146,9 @@ export function createAccounts({ db, get, all, run, insert, transaction, id, sta
       run('DELETE FROM social_comments WHERE authorId=?', user.id);
       run('DELETE FROM social_posts WHERE authorId=?', user.id);
       run('DELETE FROM social_post_media WHERE mediaId IN (SELECT id FROM social_media WHERE ownerId=?)', user.id);
-      for (const file of all('SELECT filename FROM social_media WHERE ownerId=? AND exampleFilename IS NULL', user.id))
-        run('INSERT OR IGNORE INTO account_file_deletions(filename,createdAt) VALUES(?,?)', file.filename, stamp());
+      for (const file of all('SELECT filename,posterFilename FROM social_media WHERE ownerId=? AND exampleFilename IS NULL', user.id))
+        for (const filename of [file.filename, file.posterFilename].filter(Boolean))
+          run('INSERT OR IGNORE INTO account_file_deletions(filename,createdAt) VALUES(?,?)', filename, stamp());
       run('DELETE FROM social_media WHERE ownerId=?', user.id);
 
       // Invalidate issued invitations; anonymize consumed invitations without making them reusable.

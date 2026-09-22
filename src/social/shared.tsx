@@ -328,7 +328,7 @@ export function WorkCard({
   onProfile: () => void;
   onSave: (post: CreativePost) => Promise<void>;
 }) {
-  const { C, s } = useUI();
+  const { C, resolved } = useUI();
   const x = useSocialStyles();
   const [busy, setBusy] = useState(false);
   const image = post.media[0];
@@ -338,17 +338,18 @@ export function WorkCard({
         accessibilityRole="button"
         accessibilityLabel={`Open ${post.title}`}
         onPress={onOpen}
+        style={{ borderRadius: 19, overflow: "hidden" }}
       >
         {image ? (
           <Image
-            source={mediaSource(image)}
+            source={mediaSource(image, { poster: true })}
             accessibilityLabel={image.alt || post.title}
             style={[
               x.image,
               {
                 aspectRatio: Math.max(
-                  0.86,
-                  Math.min(1.35, image.width / image.height || 1),
+                  0.6,
+                  Math.min(1.25, image.width / image.height || 0.8),
                 ),
               },
             ]}
@@ -357,13 +358,55 @@ export function WorkCard({
         ) : (
           <View style={x.imageEmpty}>
             <Icon name="images-outline" size={32} color={C.blue} />
-            <Text style={x.small}>A new idea, taking shape</Text>
+            <Text
+              style={[x.small, { textAlign: "center", paddingHorizontal: 12 }]}
+            >
+              An idea taking shape
+            </Text>
           </View>
         )}
         <View style={x.imageBadges}>
-          <View style={x.imageBadge}>
-            <Text style={x.badgeText}>{stageName(post.stage)}</Text>
-          </View>
+          {image?.kind === "video" && (
+            <View
+              style={[
+                x.imageBadge,
+                { flexDirection: "row", alignItems: "center", gap: 5 },
+              ]}
+            >
+              <Icon name="play" size={13} color="#FFFFFF" />
+              <Text style={x.badgeText}>
+                {Math.ceil(image.duration || 0)}s video
+              </Text>
+            </View>
+          )}
+          {!!post.fandom && (
+            <View
+              style={[
+                x.imageBadge,
+                {
+                  backgroundColor:
+                    post.stage === "finished" ? C.accent : C.pink,
+                  maxWidth: "100%",
+                },
+              ]}
+            >
+              <Text
+                numberOfLines={1}
+                style={[
+                  x.badgeText,
+                  {
+                    color:
+                      post.stage !== "finished" && resolved === "dark"
+                        ? "#09090E"
+                        : "#FFFFFF",
+                    textTransform: "uppercase",
+                  },
+                ]}
+              >
+                {post.fandom}
+              </Text>
+            </View>
+          )}
           {post.visibility === "private" && (
             <View style={x.imageBadge}>
               <Text style={x.badgeText}>Private draft</Text>
@@ -371,50 +414,73 @@ export function WorkCard({
           )}
           {post.visibility === "public" &&
             (needsReview(post) || needsReview(post.author)) && (
-            <View style={x.imageBadge}>
-              <Text style={x.badgeText}>
-                {needsReview(post)
-                  ? post.reviewStatus === "rejected"
-                    ? "Not approved"
-                    : "Awaiting review"
-                  : post.author.reviewStatus === "rejected"
-                    ? "Profile not approved"
-                    : "Profile awaiting review"}
-              </Text>
-            </View>
-          )}
+              <View style={x.imageBadge}>
+                <Text style={x.badgeText}>
+                  {needsReview(post)
+                    ? post.reviewStatus === "rejected"
+                      ? "Not approved"
+                      : "Awaiting review"
+                    : post.author.reviewStatus === "rejected"
+                      ? "Profile not approved"
+                      : "Profile awaiting review"}
+                </Text>
+              </View>
+            )}
           {post.isExample && (
             <View style={x.imageBadge}>
-              <Text style={x.badgeText}>AI-illustrated example</Text>
+              <Text style={x.badgeText}>AI example</Text>
+            </View>
+          )}
+          {post.media.length > 1 && (
+            <View style={x.imageBadge}>
+              <Text style={x.badgeText}>{post.media.length} photos</Text>
             </View>
           )}
         </View>
       </Pressable>
       <View style={x.postBody}>
-        <View style={{ gap: 5 }}>
-          <Text style={x.eyebrow}>{post.fandom || "Original work"}</Text>
+        <Text
+          style={[x.small, { fontSize: 10, fontWeight: "700", color: C.blue }]}
+        >
+          {stageName(post.stage)}
+        </Text>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpen}
+          style={{ minHeight: 32, justifyContent: "center" }}
+        >
+          <Text numberOfLines={2} style={x.postTitle}>
+            {post.title}
+          </Text>
+        </Pressable>
+        {post.opportunity && !post.isExample && (
+          <Text
+            numberOfLines={2}
+            style={[x.small, { fontSize: 11, color: C.green }]}
+          >
+            Looking for {post.opportunity.role}
+            {post.opportunity.city ? ` · ${post.opportunity.city}` : ""}
+          </Text>
+        )}
+        <View style={[x.toolbar, { gap: 2 }]}>
           <Pressable
             accessibilityRole="button"
-            onPress={onOpen}
-            style={{ minHeight: 32 }}
+            accessibilityLabel={`View ${post.author.displayName}'s profile`}
+            onPress={onProfile}
+            style={[x.authorButton, { gap: 5 }]}
           >
-            <Text style={x.postTitle}>{post.title}</Text>
-          </Pressable>
-          {post.character ? (
-            <Text style={x.small}>{post.character}</Text>
-          ) : null}
-        </View>
-        {post.opportunity && !post.isExample && (
-          <View style={x.row}>
-            <View style={x.unread} />
-            <Text style={[x.small, { color: C.green, flex: 1 }]}>
-              Looking for {post.opportunity.role}
-              {post.opportunity.city ? ` · ${post.opportunity.city}` : ""}
+            <Avatar
+              name={post.author.displayName}
+              size={23}
+              color={C.lavender}
+            />
+            <Text
+              numberOfLines={1}
+              style={[x.authorName, { flex: 1, fontSize: 11 }]}
+            >
+              {post.author.displayName}
             </Text>
-          </View>
-        )}
-        <View style={x.toolbar}>
-          <ProfileLink profile={post.author} onPress={onProfile} />
+          </Pressable>
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={
@@ -422,7 +488,6 @@ export function WorkCard({
             }
             accessibilityState={{ disabled: busy, selected: post.viewerSaved }}
             aria-pressed={post.viewerSaved}
-            aria-disabled={busy}
             disabled={busy}
             onPress={() => {
               setBusy(true);
@@ -435,8 +500,8 @@ export function WorkCard({
             ) : (
               <Icon
                 name={post.viewerSaved ? "bookmark" : "bookmark-outline"}
-                size={20}
-                color={post.viewerSaved ? C.blue : C.ink}
+                size={19}
+                color={post.viewerSaved ? C.pink : C.muted}
               />
             )}
           </Pressable>
@@ -459,17 +524,24 @@ export function WorkGrid({
   onProfile: (handle: string) => void;
   onSave: (post: CreativePost) => Promise<void>;
 }) {
-  const x = useSocialStyles();
+  // Independent columns preserve each photo's proportions without empty row gaps.
+  const count = wide ? 3 : 2;
+  const columns = Array.from({ length: count }, (_, index) =>
+    posts.filter((_, i) => i % count === index),
+  );
   return (
-    <View style={x.grid}>
-      {posts.map((post) => (
-        <View key={post.id} style={{ width: wide ? "48.7%" : "100%" }}>
-          <WorkCard
-            post={post}
-            onOpen={() => onOpen(post.id)}
-            onProfile={() => onProfile(post.author.handle)}
-            onSave={onSave}
-          />
+    <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 12 }}>
+      {columns.map((column, index) => (
+        <View key={index} style={{ flex: 1, minWidth: 0, gap: 15 }}>
+          {column.map((post) => (
+            <WorkCard
+              key={post.id}
+              post={post}
+              onOpen={() => onOpen(post.id)}
+              onProfile={() => onProfile(post.author.handle)}
+              onSave={onSave}
+            />
+          ))}
         </View>
       ))}
     </View>

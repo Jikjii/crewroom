@@ -85,6 +85,39 @@ test("cloud backup reads back checksums, commits manifest last, and restores pri
   assert.deepEqual(await readdir(f.stagingRoot), []);
 });
 
+test("video backup includes its poster, restores both, and detects poster corruption", async (t) => {
+  const f = await fixture(t);
+  f.db.exec("ALTER TABLE social_media ADD COLUMN posterFilename TEXT;");
+  f.db.prepare("INSERT INTO social_media(filename,exampleFilename,posterFilename) VALUES(?,NULL,?)").run("clip.mp4", "clip-poster.jpg");
+  await writeFile(path.join(f.runtime.mediaDir, "clip.mp4"), "private video bytes");
+  await writeFile(path.join(f.runtime.mediaDir, "clip-poster.jpg"), "private poster bytes");
+  const result = await runCloudBackup({ ...f, config, now: () => NOW });
+  const prefix = `${config.prefix}/${result.runId}`;
+  const manifest = JSON.parse(f.client.objects.get(`${prefix}/manifest.json`).body.toString());
+  assert.deepEqual(manifest.media.map((file) => file.filename), ["clip-poster.jpg", "clip.mp4", "media_test.jpg"]);
+  assert.equal(result.mediaCount, 3);
+  assert.equal(f.client.objects.get(`${prefix}/media/clip.mp4`).body.toString(), "private video bytes");
+  assert.equal(f.client.objects.get(`${prefix}/media/clip-poster.jpg`).body.toString(), "private poster bytes");
+  const drill = await verifyCloudBackup({ ...f, config });
+  assert.equal(drill.verified, true);
+  assert.equal(drill.mediaCount, 3);
+  f.client.tamperRead = (key) => key.endsWith("/clip-poster.jpg");
+  await assert.rejects(() => verifyCloudBackup({ ...f, config }), /checksum/);
+  assert.deepEqual(await readdir(f.stagingRoot), []);
+});
+
+test("missing or unsafe video posters stop a complete snapshot", async (t) => {
+  const f = await fixture(t);
+  f.db.exec("ALTER TABLE social_media ADD COLUMN posterFilename TEXT;");
+  f.db.prepare("UPDATE social_media SET posterFilename=?").run("missing-poster.jpg");
+  const destination = path.join(f.stagingRoot, "missing-poster");
+  await assert.rejects(() => createBackup({ ...f.runtime, destination }), /ENOENT/);
+  assert.deepEqual(await readdir(f.stagingRoot), []);
+  f.db.prepare("UPDATE social_media SET posterFilename=?").run("../private-file.jpg");
+  await assert.rejects(() => createBackup({ ...f.runtime, destination }), /unsafe media filename/);
+  assert.deepEqual(await readdir(f.stagingRoot), []);
+});
+
 test("failed upload leaves no completion manifest and removes temporary private data", async (t) => {
   const f = await fixture(t); f.client.failPut = key => key.includes("/media/");
   await assert.rejects(() => runCloudBackup({ ...f, config, now: () => NOW }), /upload failure/);

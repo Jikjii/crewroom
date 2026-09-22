@@ -1,6 +1,6 @@
 {
   "name": "crewroom",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "main": "index.ts",
   "dependencies": {
     "@aws-sdk/client-s3": "3.1135.0",
@@ -9,12 +9,14 @@
     "expo": "~57.0.24",
     "expo-clipboard": "~57.0.2",
     "expo-constants": "~57.0.19",
+    "expo-file-system": "~57.0.7",
     "expo-font": "~57.0.4",
     "expo-image-manipulator": "~57.0.19",
     "expo-image-picker": "~57.0.19",
     "expo-secure-store": "~57.0.4",
     "expo-status-bar": "~57.0.1",
     "expo-system-ui": "~57.0.4",
+    "expo-video": "~57.0.4",
     "react": "19.2.3",
     "react-dom": "19.2.3",
     "react-native": "0.86.3",

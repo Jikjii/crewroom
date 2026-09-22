@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { uploadNativeVideo } from "./videoUpload";
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 
@@ -55,7 +56,12 @@ export interface PublicConfig {
 
 export interface DeletionPreview {
   confirmationToken: string;
-  ownedCrews: { id: string; name: string; action: "delete" | "transfer"; successor: { userId: string; name: string } | null }[];
+  ownedCrews: {
+    id: string;
+    name: string;
+    action: "delete" | "transfer";
+    successor: { userId: string; name: string } | null;
+  }[];
   counts: { posts: number; comments: number; media: number };
   sharedCrewsPreserved: number;
 }
@@ -101,7 +107,9 @@ export function getApiBaseUrl(): string {
   }
 
   if (!__DEV__) {
-    throw new ApiError("This build needs Crewroom’s hosted server address. Please install an updated build.");
+    throw new ApiError(
+      "This build needs Crewroom’s hosted server address. Please install an updated build.",
+    );
   }
   const hostUri = Constants.expoConfig?.hostUri?.trim();
   if (hostUri) {
@@ -293,15 +301,33 @@ const segment = (value: string): string => encodeURIComponent(value);
 export const api = {
   getSession,
   getPublicConfig: (): Promise<PublicConfig> => request("/api/public-config"),
-  requestPasswordReset: (email: string): Promise<{ ok: true; message: string }> =>
-    request("/api/auth/password-reset/request", { method: "POST", body: { email } }),
-  confirmPasswordReset: async (token: string, password: string): Promise<void> => {
-    await request("/api/auth/password-reset/confirm", { method: "POST", body: { token, password } });
+  requestPasswordReset: (
+    email: string,
+  ): Promise<{ ok: true; message: string }> =>
+    request("/api/auth/password-reset/request", {
+      method: "POST",
+      body: { email },
+    }),
+  confirmPasswordReset: async (
+    token: string,
+    password: string,
+  ): Promise<void> => {
+    await request("/api/auth/password-reset/confirm", {
+      method: "POST",
+      body: { token, password },
+    });
     await clearLocalAuth();
   },
-  getDeletionPreview: (): Promise<DeletionPreview> => request("/api/account/deletion-preview"),
-  deleteAccount: async (password: string, confirmationToken: string): Promise<void> => {
-    await request("/api/account", { method: "DELETE", body: { password, confirmationToken } });
+  getDeletionPreview: (): Promise<DeletionPreview> =>
+    request("/api/account/deletion-preview"),
+  deleteAccount: async (
+    password: string,
+    confirmationToken: string,
+  ): Promise<void> => {
+    await request("/api/account", {
+      method: "DELETE",
+      body: { password, confirmationToken },
+    });
     await clearLocalAuth();
   },
 
@@ -419,9 +445,13 @@ export const socialApi = {
   getProfiles: (options: ProfileOptions = {}): Promise<CreatorProfile[]> =>
     request(`/api/social/profiles${socialQuery({ ...options })}`),
   getProfile: (handle: string): Promise<ProfileResult> =>
-    request(`/api/social/profiles/${segment(handle)}`),
+    request(
+      `/api/social/profiles/${segment(handle)}${Platform.OS !== "web" ? "?mediaType=all" : ""}`,
+    ),
   getFeed: (options: FeedOptions = {}): Promise<FeedResult> =>
-    request(`/api/social/feed${socialQuery({ ...options })}`),
+    request(
+      `/api/social/feed${socialQuery({ mediaType: Platform.OS === "web" ? "image" : "all", ...options })}`,
+    ),
   getPost: (id: string): Promise<PostResult> =>
     request(`/api/social/posts/${segment(id)}`),
   createPost: (input: CreatePostInput): Promise<CreativePost> =>
@@ -433,6 +463,32 @@ export const socialApi = {
     }),
   deletePost: (id: string): Promise<{ ok: true }> =>
     request(`/api/social/posts/${segment(id)}`, { method: "DELETE" }),
+  getVideoConfig: async (): Promise<{
+    enabled: boolean;
+    maxBytes: number;
+    maxDuration: number;
+  }> => {
+    try {
+      return await request("/api/social/video-config");
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 404)
+        throw new ApiError(
+          "Video is not available on this server yet. Please try again after the beta update.",
+        );
+      throw error;
+    }
+  },
+  uploadVideo: async (uri: string, mimeType?: string): Promise<MediaAsset> => {
+    await initializeNativeAuth();
+    if (!nativeToken || Platform.OS === "web")
+      throw new ApiError("Sign in in the Crewroom app to upload video.");
+    return uploadNativeVideo(
+      `${getApiBaseUrl()}/api/social/videos`,
+      uri,
+      nativeToken,
+      mimeType,
+    );
+  },
   uploadMedia: (base64: string, mimeType: string): Promise<MediaAsset> =>
     request("/api/social/media", {
       method: "POST",
@@ -487,11 +543,19 @@ export const socialApi = {
 };
 
 /** Only attach credentials to this API's private media endpoint, never external URLs. */
-export function mediaSource(asset: MediaAsset | string): {
+export function mediaSource(
+  asset: MediaAsset | string,
+  options: { poster?: boolean } = {},
+): {
   uri: string;
   headers?: Record<string, string>;
 } {
-  const path = typeof asset === "string" ? asset : asset.url;
+  const path =
+    typeof asset === "string"
+      ? asset
+      : options.poster && asset.posterUrl
+        ? asset.posterUrl
+        : asset.url;
   const base = getApiBaseUrl();
   const uri = path.startsWith("/") ? `${base}${path}` : path;
   const protectedMedia = uri.startsWith(`${base}/api/social/media/`);
@@ -506,7 +570,9 @@ export function getPublicWebUrl(path: string): string {
   if (!origin && Platform.OS === "web" && typeof window !== "undefined")
     origin = window.location.origin;
   if (!origin && !__DEV__) {
-    throw new ApiError("This build needs Crewroom’s public web address. Please install an updated build.");
+    throw new ApiError(
+      "This build needs Crewroom’s public web address. Please install an updated build.",
+    );
   }
   if (!origin) {
     const host = Constants.expoConfig?.hostUri;

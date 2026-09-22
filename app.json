@@ -9,7 +9,7 @@
       }
     },
     "scheme": "crewroom",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "orientation": "portrait",
     "userInterfaceStyle": "automatic",
     "backgroundColor": "#F6F5F0",
@@ -36,9 +36,16 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Choose photos to add to your Crewroom projects.",
-          "cameraPermission": false,
-          "microphonePermission": false
+          "photosPermission": "Choose photos and videos to add to your Crewroom projects.",
+          "cameraPermission": "Record short cosplay videos to share on Crewroom.",
+          "microphonePermission": "Record sound with your Crewroom videos."
+        }
+      ],
+      [
+        "expo-video",
+        {
+          "supportsBackgroundPlayback": false,
+          "supportsPictureInPicture": false
         }
       ]
     ],

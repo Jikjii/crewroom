@@ -764,18 +764,15 @@ function Crewroom() {
             onPress={openSocial}
             style={s.brandRow}
           >
-            <View style={s.brandMark}>
-              {[0, 1, 2, 3].map((i) => (
-                <View
-                  key={i}
-                  style={[
-                    s.markSquare,
-                    i === 3 && { backgroundColor: "#A7BAF4" },
-                  ]}
-                />
-              ))}
-            </View>
-            <Text style={[s.brand, width < 360 && { fontSize: 22 }]}>crewroom</Text>
+            <Text
+              style={[
+                s.brand,
+                !wide && { fontSize: 28 },
+                width < 360 && { fontSize: 24 },
+              ]}
+            >
+              crewroom<Text style={s.brandDot}>.</Text>
+            </Text>
           </Pressable>
           <View style={[s.row, { gap: 5 }]}>
             <IconButton
@@ -783,9 +780,9 @@ function Crewroom() {
               label="Appearance settings"
               onPress={() => setAppearanceOpen(true)}
             />
-            <IconButton
-              name={mode === "social" ? "people-outline" : "compass-outline"}
-              label={
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={
                 mode === "social"
                   ? "My private crews"
                   : "Discover creative work"
@@ -793,16 +790,33 @@ function Crewroom() {
               onPress={() =>
                 mode === "social" ? void openCrews() : openSocial()
               }
-            />
+              style={({ pressed }) => [
+                s.headerAction,
+                { minWidth: 44 },
+                pressed && { opacity: 0.65 },
+              ]}
+            >
+              <Icon
+                name={mode === "social" ? "people-outline" : "compass-outline"}
+                size={17}
+                color={C.violet}
+              />
+              {width >= 360 && (
+                <Text style={s.headerActionText}>
+                  {mode === "social" ? "Crews" : "Home"}
+                </Text>
+              )}
+            </Pressable>
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Your account"
               onPress={() => navigate("You")}
+              style={s.headerAccount}
             >
               <Avatar
                 name={session?.user?.name || "You"}
-                size={36}
-                color={C.peach}
+                size={34}
+                color={C.lavender}
               />
             </Pressable>
           </View>
@@ -837,6 +851,7 @@ function Crewroom() {
             <SocialExperience
               key={`${session?.user?.id || "visitor"}:${session?.user?.isDemo || false}:${socialHomeVersion}`}
               user={session?.user || null}
+              playbackSuspended={!!dialog || appearanceOpen}
               onRequireAccount={() =>
                 open("signup", "Join your creative community")
               }

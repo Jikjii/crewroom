@@ -8,7 +8,7 @@ import {
 } from "react-native";
 import { socialApi } from "../api";
 import type { User } from "../types";
-import { Button, Empty, Icon, Tag, useUI } from "../ui";
+import { Avatar, Button, Empty, Icon, Tag, useUI } from "../ui";
 import type {
   CollaborationAction,
   CollaborationRequest,
@@ -44,13 +44,16 @@ export default function Inbox({
   onChanged: () => void;
   notify: (message: string) => void;
 }) {
-  const { C, s } = useUI();
+  const { C } = useUI();
   const x = useSocialStyles();
   const [tab, setTab] = useState<"incoming" | "outgoing" | "updates">(
-      "incoming",
+      "updates",
     ),
     [busy, setBusy] = useState(""),
     [error, setError] = useState("");
+  const [filter, setFilter] = useState<
+    "all" | "comment" | "follow" | "collaboration"
+  >("all");
   const lock = useRef(false);
   const resource = useResource(async () => {
     if (!user || user.isDemo)
@@ -92,6 +95,7 @@ export default function Inbox({
     try {
       if (!item.read) await socialApi.markNotificationsRead([item.id]);
       const latest = await resource.reload();
+      onChanged();
       if (item.requestId)
         setTab(
           (latest || resource.data)?.requests.outgoing.some(
@@ -122,6 +126,32 @@ export default function Inbox({
       setBusy("");
     }
   };
+  const unreadCount =
+    resource.data?.notifications.filter((item) => !item.read).length || 0;
+  const incomingCount =
+    resource.data?.requests.incoming.filter(
+      (request) => request.status === "pending",
+    ).length || 0;
+  const notifications = (resource.data?.notifications || []).filter(
+    (item) =>
+      filter === "all" ||
+      (filter === "collaboration"
+        ? item.type === "request" ||
+          item.type === "accepted" ||
+          item.type === "declined"
+        : item.type === filter),
+  );
+  const timeLabel = (value: string) => {
+    const elapsed = Math.max(0, Date.now() - new Date(value).getTime());
+    if (elapsed < 60000) return "Just now";
+    if (elapsed < 3600000) return `${Math.floor(elapsed / 60000)}m ago`;
+    if (elapsed < 86400000) return `${Math.floor(elapsed / 3600000)}h ago`;
+    if (elapsed < 604800000) return `${Math.floor(elapsed / 86400000)}d ago`;
+    return new Date(value).toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+    });
+  };
   return (
     <ScrollView
       contentContainerStyle={x.content}
@@ -133,13 +163,33 @@ export default function Inbox({
         />
       }
     >
-      <View style={{ gap: 9 }}>
-        <Text style={x.eyebrow}>GOOD THINGS START WITH HELLO</Text>
-        <Text style={x.title}>Make the connection.</Text>
-        <Text style={x.intro}>
-          Thoughtful invitations. A little conversation. Something new to make
-          together.
-        </Text>
+      <View style={[x.toolbar, { alignItems: "flex-start" }]}>
+        <View style={{ flex: 1, gap: 7 }}>
+          <Text style={x.eyebrow}>YOUR CREATIVE CIRCLE</Text>
+          <Text style={x.title}>Alerts</Text>
+          <Text style={x.intro}>
+            The conversation behind your next creation.
+          </Text>
+        </View>
+        <View
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 26,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: C.pale,
+            borderWidth: 1,
+            borderColor: C.line,
+          }}
+        >
+          <Icon name="notifications-outline" size={25} color={C.blue} />
+          {unreadCount > 0 && (
+            <View
+              style={[x.unread, { position: "absolute", top: 10, right: 10 }]}
+            />
+          )}
+        </View>
       </View>
       {!user || user.isDemo ? (
         <AccountPrompt
@@ -149,22 +199,39 @@ export default function Inbox({
         />
       ) : (
         <>
-          <View style={x.wrap}>
-            <Choice
-              label={`Incoming${resource.data?.requests.incoming.filter((r) => r.status === "pending").length ? ` (${resource.data.requests.incoming.filter((r) => r.status === "pending").length})` : ""}`}
-              active={tab === "incoming"}
-              onPress={() => setTab("incoming")}
-            />
-            <Choice
-              label="Sent"
-              active={tab === "outgoing"}
-              onPress={() => setTab("outgoing")}
-            />
-            <Choice
-              label={`Updates${resource.data?.notifications.some((n) => !n.read) ? " •" : ""}`}
-              active={tab === "updates"}
-              onPress={() => setTab("updates")}
-            />
+          <View accessibilityRole="tablist" style={[x.tabRow, { gap: 20 }]}>
+            {(
+              [
+                [
+                  "updates",
+                  `Activity${unreadCount ? ` · ${unreadCount}` : ""}`,
+                ],
+                [
+                  "incoming",
+                  `Requests${incomingCount ? ` · ${incomingCount}` : ""}`,
+                ],
+                ["outgoing", "Sent"],
+              ] as const
+            ).map(([value, label]) => (
+              <Pressable
+                key={value}
+                accessibilityRole="tab"
+                accessibilityState={{ selected: tab === value }}
+                aria-selected={tab === value}
+                onPress={() => setTab(value)}
+                style={[x.textTab, tab === value && x.textTabActive]}
+              >
+                <Text
+                  style={{
+                    color: tab === value ? C.ink : C.muted,
+                    fontWeight: "700",
+                    fontSize: 15,
+                  }}
+                >
+                  {label}
+                </Text>
+              </Pressable>
+            ))}
           </View>
           <ErrorNotice
             message={error || resource.error}
@@ -174,71 +241,177 @@ export default function Inbox({
             <Spinner />
           ) : tab === "updates" ? (
             <>
-              {resource.data?.notifications.some((n) => !n.read) && (
-                <Button
-                  title={busy === "read" ? "Updating…" : "Mark all as read"}
-                  secondary
-                  disabled={!!busy}
-                  onPress={() => void markAll()}
-                />
-              )}
-              {resource.data?.notifications.map((item) => (
-                <Pressable
-                  key={item.id}
-                  accessibilityRole="button"
-                  onPress={() => void openNotification(item)}
-                  style={[
-                    x.card,
-                    !item.read && {
-                      borderColor: C.selectionBorder,
-                      backgroundColor: C.pale,
-                    },
-                  ]}
-                >
-                  <View style={x.row}>
-                    <Icon
-                      name={
-                        item.type === "comment"
-                          ? "chatbubble-outline"
-                          : item.type === "follow"
-                            ? "person-add-outline"
-                            : "people-outline"
-                      }
-                      color={C.blue}
-                    />
-                    <Text style={[x.body, { flex: 1, color: C.ink }]}>
-                      {item.text}
-                    </Text>
-                    {!item.read && (
-                      <View
-                        accessibilityLabel="Unread notification"
-                        style={x.unread}
-                      />
-                    )}
-                  </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 8 }}
+              >
+                {(
+                  [
+                    ["all", "All"],
+                    ["comment", "Comments"],
+                    ["follow", "Follows"],
+                    ["collaboration", "Collaborations"],
+                  ] as const
+                ).map(([value, label]) => (
+                  <Choice
+                    key={value}
+                    label={label}
+                    active={filter === value}
+                    onPress={() => setFilter(value)}
+                  />
+                ))}
+              </ScrollView>
+              {unreadCount > 0 && (
+                <View style={x.toolbar}>
                   <Text style={x.small}>
-                    {new Date(item.createdAt).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    {unreadCount} unread{" "}
+                    {unreadCount === 1 ? "update" : "updates"}
                   </Text>
-                </Pressable>
-              ))}
-              {!resource.data?.notifications.length && (
+                  <Pressable
+                    accessibilityRole="button"
+                    disabled={!!busy}
+                    onPress={() => void markAll()}
+                    style={{
+                      minHeight: 44,
+                      justifyContent: "center",
+                      opacity: busy ? 0.5 : 1,
+                    }}
+                  >
+                    <Text style={x.link}>
+                      {busy === "read" ? "Updating…" : "Mark all as read"}
+                    </Text>
+                  </Pressable>
+                </View>
+              )}
+              <View style={{ gap: 10 }}>
+                {notifications.map((item) => (
+                  <Pressable
+                    key={item.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${item.read ? "" : "Unread. "}${item.text}. ${timeLabel(item.createdAt)}`}
+                    onPress={() => void openNotification(item)}
+                    style={({ pressed }) => [
+                      x.card,
+                      {
+                        padding: 16,
+                        borderRadius: 22,
+                        opacity: pressed ? 0.8 : 1,
+                      },
+                      !item.read && { borderColor: C.selectionBorder },
+                    ]}
+                  >
+                    <View
+                      style={[x.row, { alignItems: "flex-start", gap: 13 }]}
+                    >
+                      <View
+                        style={{
+                          padding: 2,
+                          borderWidth: 1.5,
+                          borderColor: item.read ? C.line : C.blue,
+                          borderRadius: 28,
+                        }}
+                      >
+                        {item.actor ? (
+                          <Avatar name={item.actor.displayName} size={42} />
+                        ) : (
+                          <View
+                            style={{
+                              width: 42,
+                              height: 42,
+                              borderRadius: 21,
+                              backgroundColor: C.pale,
+                              alignItems: "center",
+                              justifyContent: "center",
+                            }}
+                          >
+                            <Icon name="sparkles-outline" color={C.blue} />
+                          </View>
+                        )}
+                      </View>
+                      <View style={{ flex: 1, gap: 7 }}>
+                        <Text
+                          style={[x.body, { color: C.ink, lineHeight: 23 }]}
+                        >
+                          {item.text}
+                        </Text>
+                        <View style={[x.row, { gap: 6 }]}>
+                          <Icon
+                            name={
+                              item.type === "comment"
+                                ? "chatbubble-outline"
+                                : item.type === "follow"
+                                  ? "person-add-outline"
+                                  : "people-outline"
+                            }
+                            color={C.muted}
+                            size={13}
+                          />
+                          <Text style={x.small}>
+                            {timeLabel(item.createdAt)}
+                          </Text>
+                        </View>
+                      </View>
+                      {!item.read && (
+                        <View
+                          accessibilityLabel="Unread notification"
+                          style={[x.unread, { marginTop: 7 }]}
+                        />
+                      )}
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
+              {!notifications.length && (
                 <Empty
-                  icon="notifications-outline"
-                  title="A little quiet, in a good way"
-                  text="Real follows, comments, and collaboration updates will appear here."
+                  icon={
+                    filter === "comment"
+                      ? "chatbubble-outline"
+                      : filter === "follow"
+                        ? "person-add-outline"
+                        : filter === "collaboration"
+                          ? "people-outline"
+                          : "notifications-outline"
+                  }
+                  title={
+                    filter === "all"
+                      ? "Your circle starts here"
+                      : filter === "comment"
+                        ? "No comments yet"
+                        : filter === "follow"
+                          ? "No new follows yet"
+                          : "No collaboration updates yet"
+                  }
+                  text={
+                    filter === "all"
+                      ? "Real follows, comments, and collaboration updates will appear here."
+                      : "When there’s something new, you’ll find it here. Pull down to refresh."
+                  }
                 />
               )}
             </>
           ) : (
             <>
+              <View style={{ gap: 5 }}>
+                <Text style={x.sectionTitle}>
+                  {tab === "incoming"
+                    ? "Make something together"
+                    : "Ideas you’ve sent"}
+                </Text>
+                <Text style={x.small}>
+                  {tab === "incoming"
+                    ? "Accept an invitation to start a private crew and plan."
+                    : "Keep up with your collaboration invitations."}
+                </Text>
+              </View>
               {resource.data?.requests[tab].map((request) => {
                 const person =
                   tab === "incoming" ? request.sender : request.recipient;
                 return (
-                  <View key={request.id} style={x.card}>
+                  <View
+                    key={request.id}
+                    style={[x.card, { borderRadius: 24, gap: 16 }]}
+                  >
                     <View style={x.toolbar}>
                       <ProfileLink
                         profile={person}
@@ -257,7 +430,12 @@ export default function Inbox({
                       </Tag>
                     </View>
                     <Text style={x.sectionTitle}>{request.title}</Text>
-                    <Text style={x.eyebrow}>{request.role}</Text>
+                    <View style={x.wrap}>
+                      <Tag>{request.role}</Tag>
+                      <Text style={[x.small, { alignSelf: "center" }]}>
+                        {timeLabel(request.createdAt)}
+                      </Text>
+                    </View>
                     <Text style={x.body}>{request.message}</Text>
                     {request.postId && (
                       <Pressable
@@ -276,8 +454,8 @@ export default function Inbox({
                             Accepting starts a new private crew and plan with
                             this person. Your existing crews remain private.
                           </Text>
-                          <View style={x.row}>
-                            <View style={x.grow}>
+                          <View style={{ gap: 10 }}>
+                            <View>
                               <Button
                                 title={
                                   busy === request.id

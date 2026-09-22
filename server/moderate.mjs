@@ -30,7 +30,7 @@ function option(name) {
 const help = `Crewroom local moderation
   node server/moderate.mjs queue
   node server/moderate.mjs inspect [profile|post|comment] ID [--html /private/path/review.html]
-  node server/moderate.mjs approve [profile|post|comment] ID --version HASH [--images-reviewed]
+  node server/moderate.mjs approve [profile|post|comment] ID --version HASH [--images-reviewed] [--videos-reviewed]
   node server/moderate.mjs reject [profile|post|comment] ID --version HASH --reason "Helpful explanation"
   node server/moderate.mjs list [all]
   node server/moderate.mjs review REPORT_ID [reviewed|dismissed]
@@ -44,9 +44,10 @@ list shows pending reports by default. review without a status displays the repo
 and target; supplying a status records that review. Hiding a post or suspending a
 public profile does not delete private crews or account data. Changes affect new
 API requests immediately. Public profiles, posts, and comments remain private to
-their author until manually approved. Inspect all text and image paths first;
+their author until manually approved. Inspect all text and media paths first;
 approval must include the matching fingerprint and an explicit assertion that
-every image was reviewed. An edit invalidates the fingerprint. Review reasons
+every image was reviewed. Videos instead require --videos-reviewed after watching
+and listening to the entire clip and inspecting its poster. An edit invalidates the fingerprint. Review reasons
 are shown only to the content author. Use MEDIA_DIR to override the image folder
 (default: media alongside the database). Reports and submissions are handled
 manually; no automated review or response time is promised.`;
@@ -81,7 +82,7 @@ try {
       : command === "inspect" ? inspectContent(db, target, status, mediaDir)
       : decideContent(db, { type: target, id: status, version: option("--version"),
         decision: command === "approve" ? "approved" : "rejected", reason: option("--reason") || "",
-        imagesReviewed: args.includes("--images-reviewed"), mediaDir });
+        imagesReviewed: args.includes("--images-reviewed"), videosReviewed: args.includes("--videos-reviewed"), mediaDir });
     if (command === "inspect" && option("--html")) {
       const output = path.resolve(option("--html"));
       const publicRoots = [path.join(root, "dist"), process.env.STATIC_DIR, mediaDir].filter(Boolean).map(p => path.resolve(p));

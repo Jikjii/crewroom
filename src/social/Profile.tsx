@@ -1,18 +1,21 @@
-import React, { useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import {
+  Image,
   Linking,
   Platform,
   Pressable,
   RefreshControl,
   ScrollView,
   Share,
+  StyleSheet,
   Switch,
   Text,
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
-import { getPublicWebUrl, socialApi } from "../api";
+import { getPublicWebUrl, mediaSource, socialApi } from "../api";
 import type { User } from "../types";
+import type { Palette } from "../theme";
 import { Avatar, Button, Empty, Field, Icon, Tag, useUI } from "../ui";
 import type {
   CreativePost,
@@ -72,8 +75,9 @@ export default function Profile({
   ensurePublic,
   onChanged,
 }: Props) {
-  const { C, s } = useUI();
+  const { C } = useUI();
   const x = useSocialStyles();
+  const v = useMemo(() => profileStyles(C), [C]);
   const resource = useResource<ProfileResult | null>(async () => {
     if (handle) return socialApi.getProfile(handle);
     if (!user) return null;
@@ -144,9 +148,21 @@ export default function Profile({
           : post.visibility === "public",
       )
     : posts;
+  const coverPost = posts.find(
+    (post) =>
+      post.media.length > 0 &&
+      post.visibility === "public" &&
+      !needsReview(post) &&
+      !needsReview(post.author),
+  );
+  const cover = coverPost?.media[0];
   return (
     <ScrollView
-      contentContainerStyle={[x.content, wide && { paddingHorizontal: 30 }]}
+      contentContainerStyle={[
+        x.content,
+        { gap: 22 },
+        wide && { paddingHorizontal: 30 },
+      ]}
       refreshControl={
         <RefreshControl
           refreshing={resource.loading && !!resource.data}
@@ -155,19 +171,6 @@ export default function Profile({
         />
       }
     >
-      <View style={x.toolbar}>
-        <Text style={x.eyebrow}>
-          {own ? "Your creative home" : "Behind the work"}
-        </Text>
-        <Pressable
-          accessibilityRole="button"
-          onPress={onCrews}
-          style={[x.row, { minHeight: 44 }]}
-        >
-          <Text style={x.link}>My crews</Text>
-          <Icon name="arrow-forward" color={C.blue} size={16} />
-        </Pressable>
-      </View>
       {!user && !handle ? (
         <AccountPrompt
           title="Make a little space for your work"
@@ -184,164 +187,227 @@ export default function Profile({
           />
           {profile && (
             <>
-              <View style={x.profileHero}>
-                <View style={x.toolbar}>
-                  <Avatar
-                    name={profile.displayName}
-                    size={72}
-                    color={C.white}
-                  />
-                  {profile.isExample ? (
-                    <Tag tone="muted">Fictional example</Tag>
-                  ) : own ? (
-                    <Tag
-                      tone={
-                        needsReview(profile)
-                          ? "orange"
-                          : profile.visibility === "public" && !user?.isDemo
-                            ? "green"
-                            : "muted"
-                      }
-                    >
-                      {user?.isDemo
-                        ? "Demo profile"
-                        : needsReview(profile)
-                          ? profile.reviewStatus === "rejected"
-                            ? "Not approved"
-                            : "Awaiting review"
-                          : profile.visibility === "public"
-                            ? "Public profile"
-                            : "Private profile"}
-                    </Tag>
-                  ) : profile.openToCollab ? (
-                    <Tag tone="green">Open to creating</Tag>
-                  ) : null}
-                </View>
-                <View style={{ gap: 6 }}>
-                  <Text style={x.title}>{profile.displayName}</Text>
-                  <Text style={x.small}>
-                    @{profile.handle}
-                    {profile.city ? ` · ${profile.city}` : ""}
-                  </Text>
-                </View>
-                <View style={x.wrap}>
-                  {profile.roles.map((role) => (
-                    <Tag key={role} tone="muted">
-                      {role}
-                    </Tag>
-                  ))}
-                </View>
-                {profile.bio ? (
-                  <Text style={[x.body, { color: C.ink }]}>{profile.bio}</Text>
-                ) : own ? (
-                  <Text style={x.body}>
-                    Tell people about the person behind the work. Your profile
-                    starts private.
-                  </Text>
-                ) : null}
-                {!profile.isExample && (
-                  <View style={x.row}>
-                    <Text style={x.small}>
-                      {profile.projectCount}{" "}
-                      {profile.projectCount === 1 ? "project" : "projects"}
-                    </Text>
-                    <Text style={x.small}>·</Text>
-                    <Text style={x.small}>
-                      {profile.followerCount}{" "}
-                      {profile.followerCount === 1 ? "follower" : "followers"}
-                    </Text>
+              <View style={v.hero}>
+                {cover && coverPost ? (
+                  <Pressable
+                    accessibilityRole="button"
+                    accessibilityLabel={`Open portfolio work: ${coverPost.title}`}
+                    onPress={() => onPost(coverPost.id)}
+                    style={[v.cover, { height: wide ? 260 : 190 }]}
+                  >
+                    <Image
+                      source={mediaSource(cover, { poster: true })}
+                      accessibilityLabel={cover.alt || coverPost.title}
+                      resizeMode="cover"
+                      style={StyleSheet.absoluteFill}
+                    />
+                    <View style={v.coverLabel}>
+                      <Icon name="images-outline" color="#FFFFFF" size={13} />
+                      <Text numberOfLines={1} style={v.coverLabelText}>
+                        From this portfolio · {coverPost.title}
+                      </Text>
+                    </View>
+                  </Pressable>
+                ) : (
+                  <View
+                    style={[
+                      v.cover,
+                      v.emptyCover,
+                      { height: wide ? 200 : 150 },
+                    ]}
+                  >
+                    <View style={v.coverCircle} />
+                    <Icon name="sparkles-outline" color={C.blue} size={34} />
+                    <Text style={v.coverTitle}>A world of your own.</Text>
                   </View>
                 )}
-                {profile.fandoms.length > 0 && (
-                  <Text style={x.small}>
-                    Into {profile.fandoms.join(" · ")}
-                  </Text>
-                )}
-                <View style={x.wrap}>
-                  {!!profile.websiteUrl && (
-                    <Button
-                      title="Website"
-                      small
-                      secondary
-                      icon="link-outline"
-                      onPress={() => openLink(profile.websiteUrl)}
-                    />
+                <View style={v.profileBody}>
+                  <View style={v.identityTop}>
+                    <View style={v.avatarRing}>
+                      <Avatar
+                        name={profile.displayName}
+                        size={82}
+                        color={C.lavender}
+                      />
+                    </View>
+                    <View style={v.profileStatus}>
+                      {profile.isExample ? (
+                        <Tag tone="muted">Fictional example</Tag>
+                      ) : own ? (
+                        <Tag
+                          tone={
+                            needsReview(profile)
+                              ? "orange"
+                              : profile.visibility === "public" && !user?.isDemo
+                                ? "green"
+                                : "muted"
+                          }
+                        >
+                          {user?.isDemo
+                            ? "Demo profile"
+                            : needsReview(profile)
+                              ? profile.reviewStatus === "rejected"
+                                ? "Not approved"
+                                : "Awaiting review"
+                              : profile.visibility === "public"
+                                ? "Public profile"
+                                : "Private profile"}
+                        </Tag>
+                      ) : profile.openToCollab ? (
+                        <Tag tone="green">Open to creating</Tag>
+                      ) : null}
+                    </View>
+                  </View>
+                  <View style={{ gap: 7 }}>
+                    <Text
+                      style={[v.name, wide && { fontSize: 38, lineHeight: 44 }]}
+                    >
+                      {profile.displayName}
+                    </Text>
+                    <Text style={v.handle}>@{profile.handle}</Text>
+                    {!!profile.city && (
+                      <View style={x.row}>
+                        <Icon
+                          name="location-outline"
+                          size={15}
+                          color={C.muted}
+                        />
+                        <Text style={x.small}>{profile.city}</Text>
+                      </View>
+                    )}
+                  </View>
+                  {!profile.isExample && (
+                    <View style={v.stats}>
+                      <View style={v.stat}>
+                        <Text style={v.statValue}>
+                          {profile.projectCount.toLocaleString()}
+                        </Text>
+                        <Text style={v.statLabel}>
+                          {profile.projectCount === 1 ? "Project" : "Projects"}
+                        </Text>
+                      </View>
+                      <View style={v.statDivider} />
+                      <View style={v.stat}>
+                        <Text style={v.statValue}>
+                          {profile.followerCount.toLocaleString()}
+                        </Text>
+                        <Text style={v.statLabel}>
+                          {profile.followerCount === 1
+                            ? "Follower"
+                            : "Followers"}
+                        </Text>
+                      </View>
+                    </View>
                   )}
-                  {!!profile.instagramUrl && (
-                    <Button
-                      title="Instagram"
-                      small
-                      secondary
-                      icon="logo-instagram"
-                      onPress={() => openLink(profile.instagramUrl)}
-                    />
+                  {profile.bio ? (
+                    <Text style={v.bio}>{profile.bio}</Text>
+                  ) : own ? (
+                    <Text style={x.body}>
+                      Tell people about the person behind the work. Your profile
+                      starts private.
+                    </Text>
+                  ) : null}
+                  <View style={x.wrap}>
+                    {profile.roles.map((role) => (
+                      <Tag key={role} tone="muted">
+                        {role}
+                      </Tag>
+                    ))}
+                  </View>
+                  {profile.fandoms.length > 0 && (
+                    <View style={x.wrap}>
+                      {profile.fandoms.map((fandom) => (
+                        <View key={fandom} style={v.fandom}>
+                          <Text style={v.fandomText}>{fandom}</Text>
+                        </View>
+                      ))}
+                    </View>
                   )}
-                  {profile.visibility === "public" &&
-                    !(own && user?.isDemo) && (
+                  <View style={x.wrap}>
+                    {!!profile.websiteUrl && (
                       <Button
-                        title={
-                          needsReview(profile)
-                            ? "Share after approval"
-                            : Platform.OS === "web"
-                              ? copied
-                                ? "Profile link copied"
-                                : "Copy profile link"
-                              : "Share profile"
-                        }
+                        title="Website"
                         small
                         secondary
-                        disabled={busy || needsReview(profile)}
-                        icon="share-outline"
-                        onPress={() => void shareProfile()}
+                        icon="link-outline"
+                        onPress={() => openLink(profile.websiteUrl)}
                       />
                     )}
-                </View>
-                {own ? (
-                  <View style={[x.row, { flexWrap: "wrap" }]}>
-                    <Button
-                      title="Edit profile"
-                      secondary
-                      icon="create-outline"
-                      onPress={() => onEdit(profile)}
-                    />
-                    <Button
-                      title="Settings & export"
-                      secondary
-                      icon="options-outline"
-                      onPress={onSettings}
-                    />
-                  </View>
-                ) : profile.isExample ? (
-                  <Text style={x.small}>
-                    This creator and their AI-illustrated projects are
-                    fictional. Following, comments, and collaboration requests
-                    are unavailable.
-                  </Text>
-                ) : (
-                  <View style={[x.row, { flexWrap: "wrap" }]}>
-                    <ToggleButton
-                      title={
-                        busy
-                          ? "One moment…"
-                          : profile.viewerFollowing
-                            ? "Following"
-                            : "Follow creator"
-                      }
-                      pressed={profile.viewerFollowing}
-                      secondary={profile.viewerFollowing}
-                      disabled={busy}
-                      onPress={() => void follow()}
-                      icon={profile.viewerFollowing ? "checkmark" : "add"}
-                    />
-                    {profile.openToCollab && (
+                    {!!profile.instagramUrl && (
                       <Button
-                        title="Suggest a collaboration"
+                        title="Instagram"
+                        small
                         secondary
-                        onPress={() => onRequest(profile)}
+                        icon="logo-instagram"
+                        onPress={() => openLink(profile.instagramUrl)}
                       />
                     )}
+                    {profile.visibility === "public" &&
+                      !(own && user?.isDemo) && (
+                        <Button
+                          title={
+                            needsReview(profile)
+                              ? "Share after approval"
+                              : Platform.OS === "web"
+                                ? copied
+                                  ? "Profile link copied"
+                                  : "Copy profile link"
+                                : "Share profile"
+                          }
+                          small
+                          secondary
+                          disabled={busy || needsReview(profile)}
+                          icon="share-outline"
+                          onPress={() => void shareProfile()}
+                        />
+                      )}
                   </View>
-                )}
+                  {own ? (
+                    <View style={[x.row, { flexWrap: "wrap" }]}>
+                      <Button
+                        title="Edit profile"
+                        icon="create-outline"
+                        onPress={() => onEdit(profile)}
+                      />
+                      <Button
+                        title="Settings & export"
+                        secondary
+                        icon="options-outline"
+                        onPress={onSettings}
+                      />
+                    </View>
+                  ) : profile.isExample ? (
+                    <Text style={x.small}>
+                      This creator and their AI-illustrated projects are
+                      fictional. Following, comments, and collaboration requests
+                      are unavailable.
+                    </Text>
+                  ) : (
+                    <View style={[x.row, { flexWrap: "wrap" }]}>
+                      <ToggleButton
+                        title={
+                          busy
+                            ? "One moment…"
+                            : profile.viewerFollowing
+                              ? "Following"
+                              : "Follow creator"
+                        }
+                        pressed={profile.viewerFollowing}
+                        secondary={profile.viewerFollowing}
+                        disabled={busy}
+                        onPress={() => void follow()}
+                        icon={profile.viewerFollowing ? "checkmark" : "add"}
+                      />
+                      {profile.openToCollab && (
+                        <Button
+                          title="Suggest a collaboration"
+                          secondary
+                          onPress={() => onRequest(profile)}
+                        />
+                      )}
+                    </View>
+                  )}
+                </View>
               </View>
               {own && !user?.isDemo && (
                 <ReviewNotice content={profile} subject="profile" />
@@ -372,8 +438,11 @@ export default function Profile({
                 </View>
               )}
               <ErrorNotice message={error} />
-              <View style={x.toolbar}>
-                <View accessibilityRole="tablist" style={x.tabRow}>
+              <View style={v.workHeader}>
+                <View
+                  accessibilityRole="tablist"
+                  style={[x.tabRow, { flex: 1 }]}
+                >
                   <Pressable
                     accessibilityRole="tab"
                     accessibilityState={{ selected: workTab === "published" }}
@@ -384,7 +453,14 @@ export default function Profile({
                       workTab === "published" && x.textTabActive,
                     ]}
                   >
-                    <Text style={x.label}>Work</Text>
+                    <Text
+                      style={[
+                        v.workTab,
+                        { color: workTab === "published" ? C.ink : C.muted },
+                      ]}
+                    >
+                      Work
+                    </Text>
                   </Pressable>
                   {own && (
                     <Pressable
@@ -397,8 +473,13 @@ export default function Profile({
                         workTab === "drafts" && x.textTabActive,
                       ]}
                     >
-                      <Text style={x.label}>
-                        Private drafts (
+                      <Text
+                        style={[
+                          v.workTab,
+                          { color: workTab === "drafts" ? C.ink : C.muted },
+                        ]}
+                      >
+                        Drafts (
                         {posts.filter((p) => p.visibility === "private").length}
                         )
                       </Text>
@@ -465,6 +546,119 @@ export default function Profile({
   );
 }
 
+const profileStyles = (C: Palette) =>
+  StyleSheet.create({
+    hero: { gap: 0 },
+    cover: {
+      width: "100%",
+      borderRadius: 24,
+      overflow: "hidden",
+      backgroundColor: C.profile,
+    },
+    emptyCover: {
+      alignItems: "flex-end",
+      justifyContent: "center",
+      padding: 26,
+      gap: 10,
+    },
+    coverCircle: {
+      position: "absolute",
+      width: 210,
+      height: 210,
+      left: -45,
+      top: -45,
+      borderRadius: 110,
+      borderWidth: 35,
+      borderColor: C.pale,
+    },
+    coverTitle: {
+      color: C.blue,
+      fontSize: 18,
+      fontWeight: "800",
+      letterSpacing: -0.4,
+    },
+    coverLabel: {
+      position: "absolute",
+      top: 14,
+      right: 14,
+      left: 14,
+      alignSelf: "flex-end",
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      padding: 9,
+      borderRadius: 12,
+      backgroundColor: "rgba(0,0,0,0.62)",
+    },
+    coverLabelText: {
+      color: "#FFFFFF",
+      fontSize: 11,
+      fontWeight: "600",
+      flexShrink: 1,
+    },
+    profileBody: { paddingHorizontal: 4, gap: 18 },
+    identityTop: {
+      flexDirection: "row",
+      alignItems: "flex-end",
+      justifyContent: "space-between",
+      gap: 12,
+      marginTop: -34,
+    },
+    avatarRing: {
+      borderWidth: 6,
+      borderColor: C.bg,
+      borderRadius: 56,
+      backgroundColor: C.bg,
+    },
+    profileStatus: { paddingBottom: 9, flexShrink: 1 },
+    name: {
+      fontSize: 32,
+      lineHeight: 38,
+      fontWeight: "800",
+      letterSpacing: -1,
+      color: C.ink,
+    },
+    handle: { color: C.blue, fontSize: 16, fontWeight: "600" },
+    bio: { fontSize: 16, lineHeight: 25, color: C.body },
+    stats: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 25,
+      paddingVertical: 4,
+    },
+    stat: { gap: 3 },
+    statValue: {
+      fontSize: 25,
+      lineHeight: 31,
+      fontWeight: "800",
+      color: C.ink,
+      letterSpacing: -0.6,
+    },
+    statLabel: { color: C.muted, fontSize: 12 },
+    statDivider: { width: 1, height: 29, backgroundColor: C.line },
+    fandom: {
+      paddingHorizontal: 11,
+      paddingVertical: 7,
+      borderRadius: 20,
+      backgroundColor: C.pale,
+      maxWidth: "100%",
+    },
+    fandomText: { fontSize: 11, fontWeight: "700", color: C.blue },
+    workHeader: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      flexWrap: "wrap",
+      gap: 12,
+    },
+    workTab: {
+      fontSize: 14,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.6,
+    },
+  });
+
 const commaList = (value: string) => [
   ...new Set(
     value
@@ -484,7 +678,7 @@ export function EditProfile({
   onClose: () => void;
   onSaved: (profile: CreatorProfile) => void;
 }) {
-  const { C, s } = useUI();
+  const { C } = useUI();
   const x = useSocialStyles();
   const [name, setName] = useState(profile.displayName),
     [handle, setHandle] = useState(profile.handle),
@@ -535,9 +729,9 @@ export function EditProfile({
           <Text style={x.small}>
             Following, commenting, and collaboration requests use your public
             creator identity. To connect, turn on “Submit my profile for public
-            sharing” below and submit it for review. Once approved, you can connect with other
-            creators. You can keep your profile private and still browse, save
-            inspiration, and work on drafts.
+            sharing” below and submit it for review. Once approved, you can
+            connect with other creators. You can keep your profile private and
+            still browse, save inspiration, and work on drafts.
           </Text>
         </View>
       )}
@@ -600,7 +794,9 @@ export function EditProfile({
         <View style={x.toolbar}>
           <View style={x.grow}>
             <Text style={x.label}>
-              {user.isDemo ? "Preview a public profile" : "Submit my profile for public sharing"}
+              {user.isDemo
+                ? "Preview a public profile"
+                : "Submit my profile for public sharing"}
             </Text>
             <Text style={x.small}>
               {user.isDemo
@@ -610,7 +806,9 @@ export function EditProfile({
           </View>
           <Switch
             accessibilityLabel={
-              user.isDemo ? "Preview a public profile" : "Submit my profile for public sharing"
+              user.isDemo
+                ? "Preview a public profile"
+                : "Submit my profile for public sharing"
             }
             value={visibility === "public"}
             onValueChange={(value) =>
@@ -645,8 +843,12 @@ export function EditProfile({
       <Button
         title={
           busy
-            ? visibility === "public" && !user.isDemo ? "Submitting…" : "Saving…"
-            : visibility === "public" && !user.isDemo ? "Submit profile for review" : "Save profile"
+            ? visibility === "public" && !user.isDemo
+              ? "Submitting…"
+              : "Saving…"
+            : visibility === "public" && !user.isDemo
+              ? "Submit profile for review"
+              : "Save profile"
         }
         disabled={busy}
         onPress={() => void save()}

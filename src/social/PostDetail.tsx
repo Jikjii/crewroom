@@ -1,4 +1,5 @@
-import React, { useRef, useState } from "react";
+import VideoPlayer from "./VideoPlayer";
+import React, { useMemo, useRef, useState } from "react";
 import {
   Image,
   Platform,
@@ -6,12 +7,14 @@ import {
   RefreshControl,
   ScrollView,
   Share,
+  StyleSheet,
   Text,
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { getPublicWebUrl, mediaSource, socialApi } from "../api";
 import type { User } from "../types";
+import type { Palette } from "../theme";
 import { Avatar, Button, Field, Icon, IconButton, Tag, useUI } from "../ui";
 import type { CreativePost, CreatorProfile, ReportInput } from "./types";
 import {
@@ -32,6 +35,7 @@ interface Props {
   user: User | null;
   wide: boolean;
   revision: number;
+  playbackSuspended?: boolean;
   onProfile: (handle: string) => void;
   onSave: (post: CreativePost) => Promise<void>;
   onEdit: (post: CreativePost) => void;
@@ -48,6 +52,7 @@ export default function PostDetail({
   user,
   wide,
   revision,
+  playbackSuspended = false,
   onProfile,
   onSave,
   onEdit,
@@ -59,8 +64,11 @@ export default function PostDetail({
   onDeleted,
   notify,
 }: Props) {
-  const { C, s } = useUI();
+  const { C } = useUI();
   const x = useSocialStyles();
+  const v = useMemo(() => detailStyles(C), [C]);
+  const scrollRef = useRef<ScrollView>(null);
+  const commentsY = useRef(0);
   const resource = useResource(
     () => socialApi.getPost(id),
     [id, revision, user?.id],
@@ -74,7 +82,8 @@ export default function PostDetail({
   const post = resource.data?.post,
     comments = resource.data?.comments || [],
     own = !!user && post?.author.userId === user.id;
-  const reviewBlocked = !!post && (needsReview(post) || needsReview(post.author));
+  const reviewBlocked =
+    !!post && (needsReview(post) || needsReview(post.author));
   const shareable =
     !!post &&
     (post.isExample ||
@@ -110,6 +119,18 @@ export default function PostDetail({
       );
     });
   };
+  const follow = async () => {
+    if (!post || post.isExample || own || lock.current) return;
+    if (!post.author.viewerFollowing && !(await ensurePublic())) return;
+    await run("follow", async () => {
+      await socialApi.followProfile(
+        post.author.userId,
+        !post.author.viewerFollowing,
+      );
+      await resource.reload();
+      onChanged();
+    });
+  };
   const share = async () => {
     if (!post || !shareable || reviewBlocked) return;
     await run("share", async () => {
@@ -137,8 +158,13 @@ export default function PostDetail({
     post.media[Math.min(selected, Math.max(0, post.media.length - 1))];
   return (
     <ScrollView
+      ref={scrollRef}
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={[x.content, wide && { paddingHorizontal: 30 }]}
+      contentContainerStyle={[
+        x.content,
+        { gap: 22 },
+        wide && { paddingHorizontal: 30 },
+      ]}
       refreshControl={
         <RefreshControl
           refreshing={resource.loading && !!post}
@@ -147,11 +173,21 @@ export default function PostDetail({
         />
       }
     >
-      <View style={x.toolbar}>
-        <ProfileLink
-          profile={post.author}
-          onPress={() => onProfile(post.author.handle)}
-        />
+      <View style={[x.toolbar, { flexWrap: "wrap" }]}>
+        <View style={[x.row, { flexShrink: 1 }]}>
+          <Icon
+            name={
+              post.stage === "tutorial"
+                ? "construct-outline"
+                : "sparkles-outline"
+            }
+            color={C.blue}
+            size={19}
+          />
+          <Text style={v.showcaseTitle}>
+            {post.stage === "tutorial" ? "Behind the build" : "Build showcase"}
+          </Text>
+        </View>
         <Tag tone={post.visibility === "private" ? "muted" : "blue"}>
           {post.visibility === "private"
             ? "Private draft"
@@ -165,37 +201,75 @@ export default function PostDetail({
           {post.visibility === "public" && (
             <ReviewNotice content={post.author} subject="profile" />
           )}
-          {post.visibility === "public" && post.author.visibility === "private" && (
-            <View style={x.soft}>
-              <Text style={x.label}>Hidden by your private profile</Text>
-              <Text style={x.small}>
-                Only you can see this work. Submit your profile for public sharing
-                when you’re ready.
-              </Text>
-            </View>
-          )}
+          {post.visibility === "public" &&
+            post.author.visibility === "private" && (
+              <View style={x.soft}>
+                <Text style={x.label}>Hidden by your private profile</Text>
+                <Text style={x.small}>
+                  Only you can see this work. Submit your profile for public
+                  sharing when you’re ready.
+                </Text>
+              </View>
+            )}
         </>
       )}
       {image ? (
         <View style={{ gap: 12 }}>
-          <Image
-            source={mediaSource(image)}
-            accessibilityLabel={image.alt || post.title}
-            resizeMode="contain"
-            style={[
-              x.image,
-              {
-                aspectRatio: Math.max(
-                  0.7,
-                  Math.min(1.8, image.width / image.height || 1),
-                ),
-                borderRadius: 23,
-                backgroundColor: C.image,
-              },
-            ]}
-          />
+          <View style={v.heroImage}>
+            {image.kind === "video" ? (
+              <VideoPlayer
+                key={image.id}
+                media={image}
+                controls
+                active={false}
+                suspended={
+                  playbackSuspended || busy === "share" || confirmDelete
+                }
+                style={{
+                  width: "100%",
+                  aspectRatio: Math.max(
+                    0.7,
+                    Math.min(1.8, image.width / image.height || 1),
+                  ),
+                  maxHeight: wide ? 640 : undefined,
+                  borderRadius: 22,
+                }}
+              />
+            ) : (
+              <Image
+                source={mediaSource(image)}
+                accessibilityLabel={image.alt || post.title}
+                resizeMode="contain"
+                style={[
+                  x.image,
+                  {
+                    aspectRatio: Math.max(
+                      0.7,
+                      Math.min(1.8, image.width / image.height || 1),
+                    ),
+                    maxHeight: wide ? 640 : undefined,
+                    borderRadius: 22,
+                    backgroundColor: C.image,
+                  },
+                ]}
+              />
+            )}
+            {post.media.length > 1 && (
+              <View style={v.imageCount}>
+                <Icon name="images-outline" color="#FFFFFF" size={14} />
+                <Text style={v.imageCountText}>
+                  {Math.min(selected + 1, post.media.length)} /{" "}
+                  {post.media.length}
+                </Text>
+              </View>
+            )}
+          </View>
           {post.media.length > 1 && (
-            <View style={x.row}>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[x.row, { paddingVertical: 2 }]}
+            >
               {post.media.map((asset, index) => (
                 <Pressable
                   key={asset.id}
@@ -218,7 +292,7 @@ export default function PostDetail({
                   />
                 </Pressable>
               ))}
-            </View>
+            </ScrollView>
           )}
         </View>
       ) : (
@@ -227,6 +301,28 @@ export default function PostDetail({
           <Text style={x.body}>An idea, waiting for its first image.</Text>
         </View>
       )}
+      <View style={[x.toolbar, { flexWrap: "wrap" }]}>
+        <ProfileLink
+          profile={post.author}
+          onPress={() => onProfile(post.author.handle)}
+        />
+        {!own && !post.isExample && (
+          <ToggleButton
+            title={
+              busy === "follow"
+                ? "One moment…"
+                : post.author.viewerFollowing
+                  ? "Following"
+                  : "Follow"
+            }
+            pressed={post.author.viewerFollowing}
+            secondary={post.author.viewerFollowing}
+            disabled={!!busy}
+            icon={post.author.viewerFollowing ? "checkmark" : "add"}
+            onPress={() => void follow()}
+          />
+        )}
+      </View>
       {post.isExample && (
         <View style={x.soft}>
           <Text style={x.label}>An imagined project, a real possibility</Text>
@@ -245,12 +341,41 @@ export default function PostDetail({
           </Text>
         </View>
       )}
-      <View style={{ gap: 10 }}>
-        <Text style={x.eyebrow}>{post.fandom || "Original work"}</Text>
-        <Text style={x.title}>{post.title}</Text>
-        {post.character ? <Text style={x.body}>{post.character}</Text> : null}
+      <View style={{ gap: 12 }}>
+        <Text style={[v.title, wide && { fontSize: 38, lineHeight: 43 }]}>
+          {post.title}
+        </Text>
+        <View style={x.wrap}>
+          <View style={v.subjectTag}>
+            <Text style={v.subjectText}>{post.fandom || "Original work"}</Text>
+          </View>
+          {!!post.character && (
+            <View style={[v.subjectTag, { backgroundColor: C.subdued }]}>
+              <Text style={[v.subjectText, { color: C.muted }]}>
+                {post.character}
+              </Text>
+            </View>
+          )}
+        </View>
       </View>
       <View style={[x.row, { flexWrap: "wrap" }]}>
+        {!post.isExample && (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View ${comments.length} comments`}
+            onPress={() =>
+              scrollRef.current?.scrollTo({
+                y: commentsY.current,
+                animated: true,
+              })
+            }
+            style={v.commentPill}
+          >
+            <Icon name="chatbubble-outline" color={C.blue} size={19} />
+            <Text style={v.commentCount}>{comments.length}</Text>
+            <Text style={x.small}>Comments</Text>
+          </Pressable>
+        )}
         <ToggleButton
           title={post.viewerSaved ? "Saved privately" : "Save for later"}
           pressed={post.viewerSaved}
@@ -264,7 +389,9 @@ export default function PostDetail({
             title={
               reviewBlocked
                 ? "Share after approval"
-                : Platform.OS === "web" ? "Copy public link" : "Share work"
+                : Platform.OS === "web"
+                  ? "Copy public link"
+                  : "Share work"
             }
             secondary
             icon="share-outline"
@@ -286,22 +413,31 @@ export default function PostDetail({
         )}
       </View>
       {!!post.body && (
-        <View style={x.section}>
-          <Text style={x.sectionTitle}>
-            {post.stage === "tutorial"
-              ? "How it came together"
-              : "Behind the work"}
-          </Text>
+        <View style={v.breakdown}>
+          <View style={x.row}>
+            <Icon name="construct-outline" color={C.blue} size={23} />
+            <Text style={[x.sectionTitle, { flex: 1 }]}>
+              {post.stage === "tutorial"
+                ? "How it came together"
+                : "Behind the work"}
+            </Text>
+          </View>
           <Text style={[x.body, { color: C.ink, lineHeight: 25 }]}>
             {post.body}
           </Text>
         </View>
       )}
       {post.credits.length > 0 && (
-        <View style={x.card}>
-          <Text style={x.sectionTitle}>Made with good people</Text>
+        <View style={v.breakdown}>
+          <View style={x.row}>
+            <Icon name="people-outline" color={C.blue} size={23} />
+            <Text style={x.sectionTitle}>Made with</Text>
+          </View>
           {post.credits.map((credit, index) => (
-            <View key={`${credit.name}-${index}`} style={x.row}>
+            <View
+              key={`${credit.name}-${index}`}
+              style={[x.row, { paddingVertical: 4 }]}
+            >
               <Avatar
                 name={credit.name}
                 size={35}
@@ -318,11 +454,14 @@ export default function PostDetail({
       )}
       {post.opportunity && (
         <View
-          style={[x.card, { backgroundColor: C.pale, borderColor: C.pale }]}
+          style={[
+            v.breakdown,
+            { backgroundColor: C.pale, borderColor: C.selectionBorder },
+          ]}
         >
           <View style={x.row}>
             <Icon name="people-outline" color={C.blue} />
-            <Text style={x.sectionTitle}>
+            <Text style={[x.sectionTitle, { flex: 1 }]}>
               {post.isExample
                 ? "An example collaboration"
                 : "The next chapter could be together"}
@@ -359,17 +498,24 @@ export default function PostDetail({
           />
         )}
       {!post.isExample && (
-        <View style={x.section}>
-          <Text style={x.sectionTitle}>
-            A little conversation
-            {comments.length ? ` (${comments.length})` : ""}
-          </Text>
+        <View
+          style={x.section}
+          onLayout={(event) => {
+            commentsY.current = event.nativeEvent.layout.y;
+          }}
+        >
+          <View style={x.row}>
+            <Text style={x.sectionTitle}>Comments</Text>
+            <View style={v.countBadge}>
+              <Text style={v.countBadgeText}>{comments.length}</Text>
+            </View>
+          </View>
           <Text style={x.body}>
             Ask about a technique. Appreciate the detail. Talk to the person
             behind the work.
           </Text>
           {comments.map((item) => (
-            <View key={item.id} style={x.card}>
+            <View key={item.id} style={v.comment}>
               <View style={x.toolbar}>
                 <ProfileLink
                   profile={item.author}
@@ -421,13 +567,15 @@ export default function PostDetail({
               placeholder="What caught your eye?"
             />
             <Button
-              title={busy === "comment" ? "Submitting…" : "Submit comment for review"}
+              title={
+                busy === "comment" ? "Submitting…" : "Submit comment for review"
+              }
               disabled={!!busy || !comment.trim()}
               onPress={() => void addComment()}
             />
             <Text style={x.small}>
-              Comments appear to others after review. You can see and delete your
-              own comment while it awaits approval.
+              Comments appear to others after review. You can see and delete
+              your own comment while it awaits approval.
             </Text>
           </View>
         </View>
@@ -490,3 +638,86 @@ export default function PostDetail({
     </ScrollView>
   );
 }
+
+const detailStyles = (C: Palette) =>
+  StyleSheet.create({
+    showcaseTitle: {
+      color: C.ink,
+      fontSize: 14,
+      fontWeight: "800",
+      letterSpacing: -0.2,
+    },
+    heroImage: {
+      borderRadius: 22,
+      overflow: "hidden",
+      backgroundColor: C.image,
+    },
+    imageCount: {
+      position: "absolute",
+      right: 14,
+      bottom: 14,
+      paddingHorizontal: 10,
+      paddingVertical: 7,
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 7,
+      borderRadius: 20,
+      backgroundColor: "rgba(0,0,0,0.7)",
+    },
+    imageCountText: { color: "#FFFFFF", fontSize: 11, fontWeight: "700" },
+    title: {
+      color: C.ink,
+      fontSize: 30,
+      lineHeight: 36,
+      letterSpacing: -0.8,
+      fontWeight: "800",
+    },
+    subjectTag: {
+      backgroundColor: C.pale,
+      borderRadius: 30,
+      paddingHorizontal: 13,
+      paddingVertical: 9,
+      maxWidth: "100%",
+    },
+    subjectText: {
+      color: C.blue,
+      fontSize: 11,
+      fontWeight: "800",
+      textTransform: "uppercase",
+      letterSpacing: 0.35,
+    },
+    commentPill: {
+      flexDirection: "row",
+      alignItems: "center",
+      gap: 8,
+      minHeight: 44,
+      paddingHorizontal: 15,
+      paddingVertical: 9,
+      backgroundColor: C.white,
+      borderWidth: 1,
+      borderColor: C.line,
+      borderRadius: 30,
+    },
+    commentCount: { color: C.ink, fontSize: 15, fontWeight: "800" },
+    breakdown: {
+      padding: 20,
+      borderRadius: 22,
+      backgroundColor: C.white,
+      borderWidth: 1,
+      borderColor: C.line,
+      gap: 16,
+    },
+    countBadge: {
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: 12,
+      backgroundColor: C.pale,
+    },
+    countBadgeText: { color: C.blue, fontSize: 12, fontWeight: "700" },
+    comment: {
+      paddingVertical: 17,
+      borderBottomWidth: 1,
+      borderBottomColor: C.line,
+      gap: 12,
+    },
+  });

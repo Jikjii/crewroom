@@ -1,10 +1,19 @@
 import React, { useRef, useState } from "react";
-import { Image, Pressable, Switch, Text, View } from "react-native";
+import {
+  Image,
+  Linking,
+  Platform,
+  Pressable,
+  ScrollView,
+  Switch,
+  Text,
+  View,
+} from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { mediaSource, socialApi } from "../api";
 import type { User } from "../types";
-import { Button, Field, Icon, IconButton, Tag, useUI } from "../ui";
+import { Button, Field, Icon, IconButton, useUI } from "../ui";
 import type {
   CreativePost,
   CreativeStage,
@@ -22,6 +31,10 @@ import {
   useResource,
 } from "./shared";
 import { useSocialStyles } from "./styles";
+import VideoPlayer from "./VideoPlayer";
+import { validateVideoSelection } from "./videoSelection";
+
+type PendingVideo = ImagePicker.ImagePickerAsset & { fileSize: number };
 
 export default function Composer({
   user,
@@ -34,7 +47,7 @@ export default function Composer({
   onClose: () => void;
   onSaved: (post: CreativePost) => void;
 }) {
-  const { C, s } = useUI();
+  const { C } = useUI();
   const x = useSocialStyles();
   const profile = useResource(() => socialApi.getMe(), [user.id]);
   const [title, setTitle] = useState(post?.title || ""),
@@ -56,11 +69,22 @@ export default function Composer({
     [busy, setBusy] = useState(false),
     [uploading, setUploading] = useState(false),
     [error, setError] = useState("");
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [pendingVideo, setPendingVideo] = useState<PendingVideo | null>(null);
+  const [permissionHelp, setPermissionHelp] = useState(false);
+  const [activeMediaId, setActiveMediaId] = useState(post?.media[0]?.id || "");
+  const activeMedia =
+    media.find((asset) => asset.id === activeMediaId) || media[0];
+  const activeMediaIndex = activeMedia ? media.indexOf(activeMedia) : 0;
+  const hasVideo =
+    !!pendingVideo || media.some((asset) => asset.kind === "video");
   const lock = useRef(false);
   const pick = async () => {
-    if (lock.current || media.length >= 4) return;
+    if (lock.current || media.length >= 4 || hasVideo) return;
     lock.current = true;
     setError("");
+    setPermissionHelp(false);
+    setUploadMessage("Preparing your photos…");
     try {
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ["images"],
@@ -101,15 +125,115 @@ export default function Composer({
       setUploading(false);
     }
   };
+  const uploadSelectedVideo = async (asset: PendingVideo) => {
+    setUploadMessage("Uploading and preparing your video… Keep Crewroom open.");
+    const uploaded = await socialApi.uploadVideo(asset.uri, asset.mimeType);
+    setMedia([{ ...uploaded, alt: "" }]);
+    setActiveMediaId(uploaded.id);
+    setPendingVideo(null);
+  };
+  const retryVideoUpload = async () => {
+    if (!pendingVideo || lock.current) return;
+    lock.current = true;
+    setUploading(true);
+    setError("");
+    try {
+      await uploadSelectedVideo(pendingVideo);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      lock.current = false;
+      setUploading(false);
+      setUploadMessage("");
+    }
+  };
+  const pickVideo = async (record: boolean) => {
+    if (Platform.OS === "web" || lock.current || media.length || pendingVideo)
+      return;
+    lock.current = true;
+    setUploading(true);
+    setUploadMessage("Getting ready…");
+    setError("");
+    setPermissionHelp(false);
+    try {
+      const config = await socialApi.getVideoConfig();
+      if (!config.enabled) {
+        throw new Error(
+          "Video is not available on this server yet. Please try again after the beta update.",
+        );
+      }
+      if (record) {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          setPermissionHelp(true);
+          throw new Error(
+            "Allow camera access in Settings to record your cosplay. You can also choose a video from your library.",
+          );
+        }
+      } else if (Platform.OS === "ios") {
+        const permission =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (!permission.granted) {
+          setPermissionHelp(true);
+          throw new Error(
+            "Allow photo library access in Settings to choose a video. Limited access to selected items is enough.",
+          );
+        }
+      }
+      setUploadMessage(
+        record ? "Opening your camera…" : "Opening your library…",
+      );
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ["videos"],
+        allowsMultipleSelection: false,
+        allowsEditing: false,
+        videoMaxDuration: Math.min(60, config.maxDuration),
+        videoQuality: ImagePicker.UIImagePickerControllerQualityType.Medium,
+      };
+      const result = record
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+      if (result.canceled) return;
+      const asset = result.assets[0];
+      if (!asset) throw new Error("Choose a video to continue.");
+      let fileSize = asset.fileSize;
+      if (!fileSize) {
+        const { File } = await import("expo-file-system");
+        fileSize = new File(asset.uri).size;
+      }
+      validateVideoSelection({ ...asset, fileSize }, config);
+      const selected = { ...asset, fileSize };
+      // Keep the picker URI until a confirmed upload succeeds, so a network
+      // failure never makes the creator record or select the same clip again.
+      setPendingVideo(selected);
+      await uploadSelectedVideo(selected);
+    } catch (e) {
+      setError(messageOf(e));
+    } finally {
+      lock.current = false;
+      setUploading(false);
+      setUploadMessage("");
+    }
+  };
   const save = async () => {
     if (lock.current) return;
     setError("");
+    if (pendingVideo) {
+      setError(
+        "Retry your video upload or discard the selected video before saving this post.",
+      );
+      return;
+    }
     if (!title.trim()) {
       setError("Give your work a title.");
       return;
     }
     if (visibility === "public" && !media.length) {
-      setError("Add at least one image before submitting your work.");
+      setError(
+        Platform.OS === "web"
+          ? "Add at least one photo before submitting your work."
+          : "Add photos or a video before submitting your work.",
+      );
       return;
     }
     if (
@@ -161,15 +285,18 @@ export default function Composer({
   };
   return (
     <Sheet
-      title={post ? "Edit your work" : "Something worth sharing"}
+      title={post ? "Edit your work" : "Create a post"}
       onClose={onClose}
       busy={busy || uploading}
     >
-      <View style={{ gap: 6 }}>
-        <Text style={x.eyebrow}>YOUR WORK, ON YOUR TERMS</Text>
+      <View style={{ gap: 9 }}>
+        <Text style={x.eyebrow}>FROM YOUR WORKBENCH TO YOUR WORLD</Text>
+        <Text style={[x.sectionTitle, { fontSize: 28 }]}>
+          Show what you’re making.
+        </Text>
         <Text style={x.body}>
-          A finished look, a small breakthrough, or how you made it. You don’t
-          need a crew to start.
+          The finished look. The work in progress. The details only you would
+          notice.
         </Text>
       </View>
       {user.isDemo && (
@@ -183,100 +310,352 @@ export default function Composer({
       )}
       {post && !user.isDemo && <ReviewNotice content={post} subject="work" />}
       <ErrorNotice message={error} />
-      <View style={{ gap: 15 }}>
-        {media.map((asset, index) => (
-          <View key={asset.id} style={x.card}>
-            <View>
-              <Image
-                source={mediaSource(asset)}
-                accessibilityLabel={asset.alt || `Selected image ${index + 1}`}
-                style={[x.image, { aspectRatio: 1.5, borderRadius: 13 }]}
-                resizeMode="cover"
+      {permissionHelp && (
+        <Button
+          title="Open device Settings"
+          secondary
+          icon="settings-outline"
+          onPress={() => {
+            void Linking.openSettings().catch(() =>
+              setError(
+                "Open your phone’s Settings and choose Crewroom to update permissions.",
+              ),
+            );
+          }}
+        />
+      )}
+      <View style={{ gap: 14 }}>
+        <View style={x.toolbar}>
+          <Text style={x.label}>{hasVideo ? "YOUR VIDEO" : "YOUR PHOTOS"}</Text>
+          <Text style={x.small}>
+            {hasVideo ? "1 video" : `${media.length} / 4`}
+          </Text>
+        </View>
+        {pendingVideo && (
+          <View style={[x.card, { padding: 16, gap: 14, borderRadius: 24 }]}>
+            <View style={{ borderRadius: 18, overflow: "hidden" }}>
+              <VideoPlayer
+                media={{
+                  id: "pending-video",
+                  kind: "video",
+                  url: pendingVideo.uri,
+                  width: pendingVideo.width,
+                  height: pendingVideo.height,
+                  duration: (pendingVideo.duration || 0) / 1000,
+                  alt: "Selected video waiting to upload",
+                }}
+                active={false}
+                controls
+                muted={false}
+                style={{ width: "100%", aspectRatio: 0.8 }}
               />
+            </View>
+            <Text style={x.label}>
+              {uploading ? "Uploading your video" : "Video not uploaded yet"}
+            </Text>
+            {uploading ? (
+              <View style={{ gap: 10 }}>
+                <Spinner />
+                <Text style={x.small}>{uploadMessage}</Text>
+              </View>
+            ) : (
+              <Text style={x.small}>
+                Your clip is still selected. Retry the upload without recording
+                again, or discard it to choose something else. Keep this screen
+                open to retain the selection.
+              </Text>
+            )}
+            <Button
+              title="Retry upload"
+              icon="cloud-upload-outline"
+              disabled={busy || uploading}
+              onPress={() => void retryVideoUpload()}
+            />
+            <Button
+              title="Discard video"
+              secondary
+              icon="trash-outline"
+              disabled={busy || uploading}
+              onPress={() => {
+                if (lock.current) return;
+                setPendingVideo(null);
+                setError("");
+              }}
+            />
+          </View>
+        )}
+        {activeMedia && (
+          <>
+            <View
+              style={{
+                borderRadius: 24,
+                overflow: "hidden",
+                backgroundColor: C.image,
+              }}
+            >
+              {activeMedia.kind === "video" ? (
+                <VideoPlayer
+                  media={activeMedia}
+                  active={false}
+                  controls
+                  muted={false}
+                  style={{ width: "100%", aspectRatio: 0.8 }}
+                />
+              ) : (
+                <Image
+                  source={mediaSource(activeMedia)}
+                  accessibilityLabel={
+                    activeMedia.alt || `Selected image ${activeMediaIndex + 1}`
+                  }
+                  style={[
+                    x.image,
+                    {
+                      aspectRatio: Math.max(
+                        0.9,
+                        Math.min(
+                          activeMedia.width / Math.max(activeMedia.height, 1),
+                          1.5,
+                        ),
+                      ),
+                    },
+                  ]}
+                  resizeMode="contain"
+                />
+              )}
               <View
                 style={{
                   position: "absolute",
-                  right: 8,
-                  top: 8,
-                  backgroundColor: C.white,
-                  borderRadius: 12,
+                  top: 12,
+                  left: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 7,
+                  backgroundColor: C.imageBadge,
+                  borderRadius: 20,
+                }}
+              >
+                <Text style={x.label}>
+                  {activeMedia.kind === "video"
+                    ? `Video${activeMedia.duration ? ` · ${Math.ceil(activeMedia.duration)}s` : ""}`
+                    : activeMediaIndex === 0
+                      ? "Cover photo"
+                      : `Photo ${activeMediaIndex + 1}`}
+                </Text>
+              </View>
+              <View
+                style={{
+                  position: "absolute",
+                  right: 10,
+                  top: 10,
+                  backgroundColor: C.imageBadge,
+                  borderRadius: 24,
                 }}
               >
                 <IconButton
                   name="close"
-                  label={`Remove image ${index + 1}`}
+                  label={
+                    activeMedia.kind === "video"
+                      ? "Remove video"
+                      : `Remove image ${activeMediaIndex + 1}`
+                  }
                   onPress={() => {
                     if (!busy && !uploading)
-                      setMedia((list) => list.filter((m) => m.id !== asset.id));
+                      setMedia((list) =>
+                        list.filter((asset) => asset.id !== activeMedia.id),
+                      );
                   }}
                 />
               </View>
             </View>
+            {!hasVideo && (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 10 }}
+              >
+                {media.map((asset, index) => (
+                  <Pressable
+                    key={asset.id}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Edit image ${index + 1}${index === 0 ? ", cover photo" : ""}`}
+                    accessibilityState={{
+                      selected: activeMedia.id === asset.id,
+                    }}
+                    onPress={() => setActiveMediaId(asset.id)}
+                    style={{
+                      padding: 3,
+                      borderRadius: 17,
+                      borderWidth: 2,
+                      borderColor:
+                        activeMedia.id === asset.id ? C.blue : C.line,
+                    }}
+                  >
+                    <Image
+                      source={mediaSource(asset)}
+                      style={{
+                        width: 64,
+                        height: 78,
+                        borderRadius: 12,
+                        backgroundColor: C.image,
+                      }}
+                      resizeMode="cover"
+                    />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            )}
             <Field
-              label={`Image ${index + 1} description`}
-              value={asset.alt}
+              label={
+                hasVideo
+                  ? "Video description"
+                  : `Image ${activeMediaIndex + 1} description`
+              }
+              value={activeMedia.alt}
               onChange={(value) =>
                 setMedia((list) =>
-                  list.map((m) =>
-                    m.id === asset.id ? { ...m, alt: value } : m,
+                  list.map((asset) =>
+                    asset.id === activeMedia.id
+                      ? { ...asset, alt: value }
+                      : asset,
                   ),
                 )
               }
-              placeholder="Describe the image for someone who can’t see it"
+              placeholder={
+                hasVideo
+                  ? "Describe the action and any important speech or sound"
+                  : "Describe this photo for someone who can’t see it"
+              }
             />
-          </View>
-        ))}
-        {media.length < 4 && (
+          </>
+        )}
+        {media.length < 4 && !hasVideo && (
           <Pressable
             accessibilityRole="button"
             accessibilityLabel="Choose photos from library"
+            accessibilityState={{ disabled: busy || uploading }}
             disabled={busy || uploading}
             onPress={() => void pick()}
-            style={x.upload}
+            style={({ pressed }) => [
+              x.upload,
+              {
+                minHeight: media.length ? 94 : 280,
+                borderRadius: 26,
+                borderStyle: "solid",
+                gap: 15,
+                opacity: busy ? 0.5 : pressed ? 0.8 : 1,
+              },
+            ]}
           >
             {uploading ? (
-              <Spinner />
+              <>
+                <Spinner />
+                <Text style={[x.small, { textAlign: "center" }]}>
+                  {uploadMessage}
+                </Text>
+              </>
             ) : (
               <>
-                <Icon name="images-outline" color={C.blue} size={30} />
-                <Text style={x.label}>
-                  {media.length
-                    ? "Add another image"
-                    : "Let your work do the talking"}
-                </Text>
-                <Text style={[x.small, { textAlign: "center" }]}>
-                  Choose photos · up to 4 images
-                </Text>
+                {!media.length && (
+                  <View
+                    style={{
+                      width: 92,
+                      height: 106,
+                      borderRadius: 23,
+                      backgroundColor: C.white,
+                      borderWidth: 1,
+                      borderColor: C.selectionBorder,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      transform: [{ rotate: "-7deg" }],
+                    }}
+                  >
+                    <Icon name="images-outline" color={C.blue} size={43} />
+                    <View
+                      style={{
+                        position: "absolute",
+                        bottom: -9,
+                        right: -9,
+                        width: 34,
+                        height: 34,
+                        borderRadius: 17,
+                        backgroundColor: C.accent,
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
+                      <Icon name="add" color={C.onAccent} size={22} />
+                    </View>
+                  </View>
+                )}
+                <View style={{ gap: 6, alignItems: "center" }}>
+                  <View style={x.row}>
+                    {!!media.length && (
+                      <Icon
+                        name="add-circle-outline"
+                        color={C.blue}
+                        size={22}
+                      />
+                    )}
+                    <Text
+                      style={[x.label, { fontSize: media.length ? 14 : 20 }]}
+                    >
+                      {media.length
+                        ? "Add more photos"
+                        : "Start with your photos"}
+                    </Text>
+                  </View>
+                  <Text style={[x.small, { textAlign: "center" }]}>
+                    Choose from your library · up to 4 images
+                  </Text>
+                </View>
               </>
             )}
           </Pressable>
         )}
-        {!!media.length && (
+        {Platform.OS !== "web" && media.length === 0 && !pendingVideo && (
+          <View style={{ gap: 12 }}>
+            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 10 }}>
+              <View style={{ flex: 1, minWidth: 155 }}>
+                <Button
+                  title="Record video"
+                  icon="videocam-outline"
+                  disabled={busy || uploading}
+                  onPress={() => void pickVideo(true)}
+                />
+              </View>
+              <View style={{ flex: 1, minWidth: 155 }}>
+                <Button
+                  title="Choose video"
+                  secondary
+                  icon="film-outline"
+                  disabled={busy || uploading}
+                  onPress={() => void pickVideo(false)}
+                />
+              </View>
+            </View>
+            <Text style={[x.small, { textAlign: "center" }]}>
+              One video up to 60 seconds and 50 MB, or up to 4 photos. Your
+              camera will ask for permission to record sound.
+            </Text>
+          </View>
+        )}
+        {hasVideo && !pendingVideo && (
           <Text style={x.small}>
-            Images are prepared for sharing and location metadata is removed.
+            Play your video to check it before sharing. To use photos instead,
+            remove this video first.
+          </Text>
+        )}
+        {!!media.length && !hasVideo && (
+          <Text style={x.small}>
+            Your first image is the cover. Location metadata is removed before
+            sharing.
+            {Platform.OS !== "web"
+              ? " To add a video, remove these photos first."
+              : ""}
           </Text>
         )}
       </View>
-      <Field
-        label="Title"
-        value={title}
-        onChange={setTitle}
-        placeholder="The cloudkeeper, finally ready"
-      />
-      <Field
-        label="Character or original creation"
-        value={character}
-        onChange={setCharacter}
-        placeholder="Who are you bringing to life?"
-      />
-      <Field
-        label="Fandom or theme"
-        value={fandom}
-        onChange={setFandom}
-        placeholder="A favorite series, original characters…"
-      />
-      <View style={{ gap: 9 }}>
-        <Text style={x.label}>Where’s the work at?</Text>
+      <View style={{ gap: 12 }}>
+        <Text style={x.label}>WHAT ARE YOU SHARING?</Text>
         <View style={x.wrap}>
           {(["wip", "finished", "tutorial"] as const).map((value) => (
             <Choice
@@ -285,7 +664,7 @@ export default function Composer({
                 value === "wip"
                   ? "In progress"
                   : value === "finished"
-                    ? "Finished"
+                    ? "Finished look"
                     : "Tutorial"
               }
               active={stage === value}
@@ -294,15 +673,42 @@ export default function Composer({
           ))}
         </View>
       </View>
-      <Field
-        label="The story & making notes"
-        value={body}
-        onChange={setBody}
-        multiline
-        placeholder="The idea, the tricky part, something you learned. Give the work a little context."
-      />
-      <View style={{ gap: 13 }}>
-        <Text style={x.sectionTitle}>Made with</Text>
+      <View style={[x.card, { padding: 18, borderRadius: 24, gap: 18 }]}>
+        <View style={x.row}>
+          <Icon name="create-outline" color={C.blue} />
+          <Text style={x.sectionTitle}>The story</Text>
+        </View>
+        <Field
+          label="Title"
+          value={title}
+          onChange={setTitle}
+          placeholder="The cloudkeeper, finally ready"
+        />
+        <Field
+          label="Character or original creation"
+          value={character}
+          onChange={setCharacter}
+          placeholder="Who are you bringing to life?"
+        />
+        <Field
+          label="Fandom or theme"
+          value={fandom}
+          onChange={setFandom}
+          placeholder="A favorite series, original characters…"
+        />
+        <Field
+          label="The story & making notes"
+          value={body}
+          onChange={setBody}
+          multiline
+          placeholder="The idea, the tricky part, something you learned. Give the work a little context."
+        />
+      </View>
+      <View style={[x.card, { padding: 18, borderRadius: 24, gap: 15 }]}>
+        <View style={x.row}>
+          <Icon name="people-outline" color={C.blue} />
+          <Text style={x.sectionTitle}>Made with</Text>
+        </View>
         <Text style={x.small}>
           Credit the people who helped. These are your attributions, not
           verified endorsements.
@@ -348,10 +754,12 @@ export default function Composer({
           }
         />
       </View>
-      <View style={x.card}>
+      <View style={[x.card, { padding: 18, borderRadius: 24 }]}>
         <View style={x.toolbar}>
           <View style={x.grow}>
-            <Text style={x.label}>Make something together</Text>
+            <Text style={[x.label, { fontSize: 16 }]}>
+              Open to collaboration
+            </Text>
             <Text style={x.small}>Let people request a collaboration.</Text>
           </View>
           <Switch
@@ -397,8 +805,11 @@ export default function Composer({
           </>
         )}
       </View>
-      <View style={{ gap: 11 }}>
-        <Text style={x.sectionTitle}>Who can see this?</Text>
+      <View style={{ gap: 12 }}>
+        <View style={x.row}>
+          <Icon name="eye-outline" color={C.blue} />
+          <Text style={x.sectionTitle}>Who can see this?</Text>
+        </View>
         {(["private", "public"] as const).map((value) => (
           <Pressable
             key={value}
@@ -443,9 +854,10 @@ export default function Composer({
         <View style={x.soft}>
           <Text style={x.label}>Reviewed before it’s shared</Text>
           <Text style={x.small}>
-            We review public photos, making notes, and credits before they appear
-            to others. Editing public work sends it back for review and hides it
-            until approved again. You can save a private draft at any time.
+            We review public {hasVideo ? "videos" : "photos"}, making notes, and
+            credits before they appear to others. Editing public work sends it
+            back for review and hides it until approved again. You can save a
+            private draft at any time.
           </Text>
         </View>
       )}
@@ -472,26 +884,52 @@ export default function Composer({
         message={profile.error}
         retry={() => void profile.reload()}
       />
-      <Button
-        title={
-          busy
-            ? visibility === "public" && !user.isDemo
-              ? "Submitting…"
-              : "Saving…"
+      <View
+        style={{
+          borderTopWidth: 1,
+          borderTopColor: C.line,
+          paddingTop: 18,
+          gap: 10,
+        }}
+      >
+        <Text style={[x.small, { textAlign: "center" }]}>
+          {pendingVideo
+            ? "Finish uploading or discard your selected video before saving."
             : visibility === "private"
-              ? "Save private draft"
+              ? "Save it for yourself. Share when you’re ready."
               : user.isDemo
-                ? "Save demo preview"
-                : post
-                  ? "Submit changes for review"
-                  : "Submit my work for review"
-        }
-        disabled={busy || uploading || profile.loading || !!profile.error}
-        onPress={() => void save()}
-        icon={
-          visibility === "private" ? "lock-closed-outline" : "arrow-up-outline"
-        }
-      />
+                ? "This preview stays inside your private demo."
+                : "Your work stays private until it’s reviewed."}
+        </Text>
+        <Button
+          title={
+            busy
+              ? visibility === "public" && !user.isDemo
+                ? "Submitting…"
+                : "Saving…"
+              : visibility === "private"
+                ? "Save private draft"
+                : user.isDemo
+                  ? "Save demo preview"
+                  : post
+                    ? "Submit changes for review"
+                    : "Submit my work for review"
+          }
+          disabled={
+            busy ||
+            uploading ||
+            !!pendingVideo ||
+            profile.loading ||
+            !!profile.error
+          }
+          onPress={() => void save()}
+          icon={
+            visibility === "private"
+              ? "lock-closed-outline"
+              : "arrow-up-outline"
+          }
+        />
+      </View>
     </Sheet>
   );
 }
