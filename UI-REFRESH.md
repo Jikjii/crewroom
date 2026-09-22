@@ -25,8 +25,8 @@ These references also depict video recording, effects, likes, challenges, creato
 
 ## Delivery
 
-The follow-on 0.4.0 native video work is documented in [VIDEO-BETA.md](VIDEO-BETA.md). That update adds server capabilities and phone-only recording/playback; the UI-only validation below remains the historical baseline.
+The follow-on 0.4.0 native video work is documented in [VIDEO-BETA.md](VIDEO-BETA.md). That update adds server capabilities and phone-only recording/playback; the UI-only validation above remains the historical baseline.
 
-The initial UI-only update was a source-code update with a local preview. On its own it did not change the beta signup page, server schema, API, account data, or TestFlight distribution configuration. Deploy the new web export/server image to update the hosted website. Build and distribute a new signed iOS/Android binary to update existing installed apps, then repeat physical-device acceptance for the new build.
+On September 22, revision `c1be38b` deployed the refreshed web interface and video-capable backend to [joincrewroom.com](https://joincrewroom.com/). Existing photo content loaded successfully, and video creation/feed controls remain native-only. The beta signup page is unchanged. Signed iPhone candidate 0.4.0 (3) is ready for the owner's physical-device testing; the existing TestFlight release is unchanged until that acceptance and the remaining release checks are complete.
 
 The temporary preview server, QA database, seeded local-only accounts, and export/test logs are in ignored `work/` paths and are not release artifacts.

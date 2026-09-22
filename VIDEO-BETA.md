@@ -1,6 +1,6 @@
 # Crewroom iPhone video beta
 
-Prepared September 22, 2026. The next private TestFlight release includes the shared interface refresh plus native video recording, video upload, and a vertical video feed. This document is a release checklist, not evidence that a new binary is installed or approved. The previous photo-only iPhone tests in `NATIVE-TESTING.md` do not validate this release.
+Updated September 22, 2026. The interface refresh and video-capable backend are deployed. Signed iPhone candidate **0.4.0 (3)** is ready for the owner's registered iPhone: [open the Expo installation page in iPhone Safari](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/f7f2b4d4-a3e3-4558-b8da-6f1ba712e0b1), then choose **Install**. Physical-device acceptance is still pending. The current private TestFlight release remains 0.3.0 (2); this candidate has not been distributed to that group. The previous photo-only iPhone tests in `NATIVE-TESTING.md` do not validate this release.
 
 ## Scope
 
@@ -92,18 +92,20 @@ Use a physical iPhone: the simulator cannot validate its camera hardware. Expo d
 
 ## Evidence and remaining checks
 
-- September 22: local FFmpeg and ffprobe were found at `/opt/homebrew/bin/ffmpeg` and `/opt/homebrew/bin/ffprobe`. This does not establish availability inside Render's runtime image.
+- September 22: local FFmpeg and ffprobe were found at `/opt/homebrew/bin/ffmpeg` and `/opt/homebrew/bin/ffprobe`. After deployment, the live Render processor also converted an isolated synthetic video with audio and generated a JPEG poster (320×480, 1.022 seconds, 17,405 poster bytes). The temporary source/output directory was deleted; no production post was created or approved.
 - September 22: 18 targeted backup/runtime tests passed, including a video-plus-poster cloud round trip, poster corruption detection, missing/unsafe-poster rejection, and compatibility with photo-only backup schemas. Cloud tests use a fake object store and do not establish the state of the live R2 bucket.
-- September 22: the full integration run reached 95/95 passing tests and Expo Doctor reached 21/21 during implementation. Final composer/player changes still require the final check/export pass before release.
+- September 22: final source validation passed 95/95 integration tests, TypeScript, Expo Doctor 21/21, dependency compatibility checks, and web/iOS/Android exports. The native source archive contained no environment files, signing credentials, database, backups, or server/work files.
 - September 22: the existing live backup restore drill verified 10 media files (about 1 MB) before deployment. This establishes the existing recovery path, not a video-inclusive live restore.
-- This document has not yet recorded a video-capable production deployment, live video restore drill, signed candidate, physical iPhone acceptance, or a new TestFlight approval. Record each real result before marking it complete.
+- September 22: [Render deployment `dep-dapgvi8473hc73dsf28g`](https://dashboard.render.com/web/srv-damc8mp42hec738hb7mg/deploys/dep-dapgvi8473hc73dsf28g) deployed revision `c1be38bb11ad8cc78794f9043ea8e51c92fe5abf`, starting at 7:31:21 PM EDT and completing in 1 minute 36 seconds. Render showed **Live**. Health and video-configuration endpoints returned HTTP 200; the refreshed web interface displayed existing photos and retained photo-only creation.
+- September 22: EAS build `f7f2b4d4-a3e3-4558-b8da-6f1ba712e0b1` finished for revision `c1be38b`. The downloaded IPA identifies `com.joincrewroom.app`, version 0.4.0, build 3, minimum iOS 16.4, and includes camera/microphone permission descriptions. ZIP integrity and the embedded provisioning profile's CMS signature were checked; the certificate chain was not evaluated by that check. The ad hoc profile contains the owner's existing registered device. IPA SHA-256: `cd62cfb62376b2dd9e30069b707f4d9a193e3046e1319844435cc186dcf6d0cc`.
+- Still pending: physical iPhone acceptance, deployed end-to-end video/account checks, a video-inclusive live restore drill, App Store Connect privacy/review updates, and a new private TestFlight release. Do not infer these from successful exports or the completed signed build.
 
 | Release evidence | Result |
 |---|---|
-| Source revision and automated checks | September 22: 95/95 tests, TypeScript, Expo Doctor 21/21, and web/iOS/Android exports passed. |
-| Deployed backend revision and date | Pending |
+| Source revision and automated checks | `c1be38b`, September 22: 95/95 tests, TypeScript, Expo Doctor 21/21, and web/iOS/Android exports passed. |
+| Deployed backend revision and date | `c1be38b`, September 22: Render deployment Live, health/configuration HTTP 200, isolated video/poster processing passed. |
 | Live video/poster restore drill | Pending |
-| Signed iPhone build and installation | Pending |
+| Signed iPhone build and installation | Ad hoc 0.4.0 (3) finished and package checked; physical installation pending. |
 | Physical iPhone checklist | Pending |
 | App Store Connect privacy/review update | Pending |
-| Private TestFlight build/status | Pending |
+| Private TestFlight build/status | New video release pending; existing 0.3.0 (2) unchanged. |
