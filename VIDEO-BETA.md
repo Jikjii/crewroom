@@ -8,7 +8,7 @@ Updated September 22, 2026. The interface refresh and video-capable backend are 
 - Use one video per post, up to 60 seconds and 50 MiB (shown as 50 MB in the app). SDR MP4 and MOV inputs are processed into an MP4 and a still preview. HDR clips are rejected with guidance to choose/export SDR or turn off HDR Video in camera settings; the beta does not attempt HDR tone mapping. The original upload is temporary, not the published copy.
 - Browse videos in the native app. Existing saving, creator profiles, comments, reports, blocking, and collaboration workflows still apply.
 - Keep the web experience focused on photos, project details, and the existing creative network. The beta does not introduce a web camera or web video feed.
-- Public submissions currently remain under human review. [HYBRID-MODERATION.md](HYBRID-MODERATION.md) tracks the prepared photo/text screening activation; the selected Starter configuration keeps video under human review. A private draft can be viewed by its owner immediately.
+- Photo/text submissions now publish after successful automatic screening. [HYBRID-MODERATION.md](HYBRID-MODERATION.md) records the live activation and checks; the Starter configuration keeps all videos under human review. A private draft can be viewed by its owner immediately.
 
 This first version does not add music licensing, effects, a timeline editor, live streaming, or an algorithmic recommendation system. Record only material and audio you have permission to share.
 
