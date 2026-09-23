@@ -1,6 +1,8 @@
 # Crewroom iPhone video beta
 
-Updated September 22, 2026. The interface refresh and video-capable backend are deployed. Signed iPhone candidate **0.4.0 (4)** with the moderation UI follow-up is ready for the owner's registered iPhone: [open the Expo installation page in iPhone Safari](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/3239cd1b-a202-4506-8453-23adb4b1099b), then choose **Install**. Physical-device acceptance is still pending. The current private TestFlight release remains 0.3.0 (2); this candidate has not been distributed to that group. The previous photo-only iPhone tests in `NATIVE-TESTING.md` do not validate this release.
+Updated September 23, 2026 EDT. The interface refresh, video backend and hybrid photo/text moderation are deployed. On signed iPhone preview **0.4.0 (4)**, the owner confirmed cellular sign-in, a 10–15 second recording and preview with sound, private-draft persistence and playback/seeking after restarting the app, and audio stopping when leaving playback. The iPhone model and iOS version were not provided; the wider physical checklist below remains unverified.
+
+App Store distribution **0.4.0 (5)** finished from source `e753873`, and its EAS submission succeeded at `2026-09-23T03:56:20Z`. Apple processing is Complete and build 5 is **Waiting for Review** as of September 23, 12:06 AM EDT. The existing group is selected; automatic tester notification is disabled pending the final device check. Apple approval and tester availability remain pending. The existing TestFlight release remains 0.3.0 (2). Follow [TESTFLIGHT-0.4.0.md](TESTFLIGHT-0.4.0.md) for the current release record. Preview build 4 remains available from its [Expo installation page](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/3239cd1b-a202-4506-8453-23adb4b1099b). The previous photo-only tests in `NATIVE-TESTING.md` do not validate the new video behavior.
 
 ## Scope
 
@@ -30,11 +32,11 @@ At startup, the backend removes interrupted uploads from its strictly named `.vi
 
 ## Operator review: watch the whole video
 
-The prepared hybrid-moderation follow-up adds a browser review desk and optional automated screening; see [HYBRID-MODERATION.md](HYBRID-MODERATION.md). It is not included in signed candidate 0.4.0 (3) and has not been activated. The instructions below continue to apply to human video reviews, including videos held by the automatic checks.
+The [browser moderation desk](https://joincrewroom.com/moderation) is live for the owner's personal operator account. Automatic photo/text screening is active; Starter videos and their sound remain under human review. Preview 0.4.0 (4) includes the updated moderation labels and report categories. See [HYBRID-MODERATION.md](HYBRID-MODERATION.md) for the active configuration and dashboard workflow.
 
-Continue the daily pending-submission and report checks described in `MODERATION.md`. For video, reading the caption or checking the poster is insufficient. Watch the **entire processed clip with sound**, inspect the poster, and read its title, notes, alternative description, credits, and collaboration fields before approval. Review the actual processed file referenced by the inspection, not a creator's separate social-media copy.
+Continue daily **Review queue** and **Reports** checks in the desk. Choose **Inspect submission**, watch the **entire processed clip with sound**, inspect the poster, and read its title, notes, alternative description, credits, and collaboration fields before recording a decision. Review the creator profile if it is also pending. Reading the caption or checking the poster alone is insufficient. Review the actual processed file referenced by the inspection, not a creator's separate social-media copy.
 
-On Render, list pending submissions and inspect the exact post ID returned by the queue:
+The following Render CLI procedure is a recovery alternative; normal approvals no longer need terminal commands. List pending submissions and inspect the exact post ID returned by the queue:
 
 ```sh
 cd /app
@@ -67,12 +69,14 @@ node server/moderate.mjs --db /var/data/crewroom.sqlite approve post ACTUAL_POST
 3. Use disposable accounts to test an uploaded clip, its poster, moderation, authorized seeking, re-review, unpublishing, blocking, and deletion against the deployed service. A second account and a signed-out session must not retrieve pending/private media. Remove disposable test data afterward.
 4. After at least one video is represented in a completed backup, run `node scripts/backup-worker.mjs --verify-latest` from `/app`. It restores into isolated temporary storage and must verify the database, video, and poster without replacing production data. Record the result; a pre-video restore drill is not this check.
 5. Build a signed iPhone candidate against `https://joincrewroom.com`. Test on the owner's physical iPhone first using the acceptance steps below. Use the existing `com.joincrewroom.app` identity and `geraldogs-team/crewroom` project. New native dependencies and permission declarations require a new binary; a web deployment cannot update the installed app.
-6. Update App Store Connect review information and privacy answers to accurately describe chosen videos and recorded audio. Give Apple's reviewer a working dedicated review account and explain the review-gated public feed. Check the public privacy page describes camera/microphone use and processed media.
+6. Update App Store Connect review information and privacy answers to accurately describe chosen videos and recorded audio. Give Apple's reviewer a working dedicated ordinary review account and explain automatic photo/text checks, held flagged submissions and human video review. Check the public privacy page describes camera/microphone use and processed media.
 7. Submit the tested candidate to private TestFlight, wait for Apple's processing/review as applicable, and make it available to the existing private group. Record the build number and actual status. Do not describe submission as acceptance or a public App Store launch.
 
 ## Physical iPhone acceptance
 
 Use a disposable creator account and a separate viewer account. Record iPhone model, iOS version, app version/build, backend revision, date, and pass/fail for each group. Existing accounts should not be deleted for testing.
+
+**Owner-reported results, September 22 EDT, preview 0.4.0 (4):** cellular sign-in; 10–15 second recording and preview with sound; private draft retained after restarting the app and playable/seekable; audio stops when leaving playback. Device model and OS are not recorded. This establishes those specific checks only, not every item in the following matrix.
 
 | Check | Expected result |
 |---|---|
@@ -100,14 +104,23 @@ Use a physical iPhone: the simulator cannot validate its camera hardware. Expo d
 - September 22: the existing live backup restore drill verified 10 media files (about 1 MB) before deployment. This establishes the existing recovery path, not a video-inclusive live restore.
 - September 22: [Render deployment `dep-dapgvi8473hc73dsf28g`](https://dashboard.render.com/web/srv-damc8mp42hec738hb7mg/deploys/dep-dapgvi8473hc73dsf28g) deployed revision `c1be38bb11ad8cc78794f9043ea8e51c92fe5abf`, starting at 7:31:21 PM EDT and completing in 1 minute 36 seconds. Render showed **Live**. Health and video-configuration endpoints returned HTTP 200; the refreshed web interface displayed existing photos and retained photo-only creation.
 - September 22: EAS build `f7f2b4d4-a3e3-4558-b8da-6f1ba712e0b1` finished for revision `c1be38b`. The downloaded IPA identifies `com.joincrewroom.app`, version 0.4.0, build 3, minimum iOS 16.4, and includes camera/microphone permission descriptions. ZIP integrity and the embedded provisioning profile's CMS signature were checked; the certificate chain was not evaluated by that check. The ad hoc profile contains the owner's existing registered device. IPA SHA-256: `cd62cfb62376b2dd9e30069b707f4d9a193e3046e1319844435cc186dcf6d0cc`.
-- Still pending: physical iPhone acceptance, deployed end-to-end video/account checks, a video-inclusive live restore drill, App Store Connect privacy/review updates, and a new private TestFlight release. Do not infer these from successful exports or the completed signed build.
+- September 22: preview **0.4.0 (4)** succeeded with client revision `5af210e`. The owner subsequently confirmed the specific physical checks recorded above. Build 3 is superseded; its package checks remain historical evidence only.
+- September 22: hybrid moderation is active at backend revision `1f3d931`; 60 targeted regression tests and all 8 bounded live provider cases passed. The owner's browser moderation access was verified. See [HYBRID-MODERATION.md](HYBRID-MODERATION.md) for the complete evidence and limitations.
+- September 22: a read-only native readiness audit found no confirmed release-blocking issue, and native configuration/video-selection tests passed 12/12. This does not replace physical permission, network or camera checks.
+- September 22: App Store distribution **0.4.0 (5)** finished from `e753873`: [EAS build](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/dc9b03e3-d48f-400b-8c10-516db9c43b91). IPA identity and permission descriptions were inspected. Its embedded App Store profile has no device allowlist, `get-task-allow=false` and `beta-reports-active=true`; this was metadata inspection, not independent certificate-chain validation.
+- September 22: deployment `dep-dapkqh49v7es738vdtcg` made `7e3d78d` Live, starting at 11:53:40 PM EDT and completing in 1m05s. New live-check helpers passed 5/5 local tests; live private-video API acceptance passed 6/6 cases in 27 requests and 4 cleanup requests. Both synthetic fixture accounts were deleted and no public posts were created.
+- September 22: an isolated live R2 round trip verified a synthetic MP4 and poster, using 23 cloud requests plus 5 cleanup requests. Four fixture objects/two media files were cleaned up; production database and media were untouched. Fresh production backup `run-1790135803651-e0d9350b-b5f3-4519-afe8-2ec929ef5e45` (`2026-09-23T03:57:01.854Z`, 26,229,702 encrypted bytes, 19 media files) also passed isolated restore verification. Read-only production counts show 11 images, 4 videos and 4 video posters, confirming that the production restore included real videos and posters.
+- September 22: [EAS submission `42060c69-ac89-45ce-a06b-bb5702a1a036`](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/42060c69-ac89-45ce-a06b-bb5702a1a036) finished at `2026-09-23T03:56:20Z`. Apple showed Processing at 11:56 PM EDT. Beta Description and Review Notes were saved, along with the privacy policy URL. App Privacy collection answers remain a draft proposal.
+- Still pending: the remaining physical checklist including public-video approval/feed behavior, further report/block/moderation device checks, final App Privacy answers, Apple review and the new TestFlight release. Live private API checks do not establish public device/feed acceptance.
 
 | Release evidence | Result |
 |---|---|
-| Source revision and automated checks | `c1be38b`, September 22: 95/95 tests, TypeScript, Expo Doctor 21/21, and web/iOS/Android exports passed. |
-| Deployed backend revision and date | `c1be38b`, September 22: Render deployment Live, health/configuration HTTP 200, isolated video/poster processing passed. |
-| Live video/poster restore drill | Pending |
-| Signed iPhone build and installation | Ad hoc 0.4.0 (3) finished and package checked; physical installation pending. |
-| Physical iPhone checklist | Pending |
-| App Store Connect privacy/review update | Pending |
-| Private TestFlight build/status | New video release pending; existing 0.3.0 (2) unchanged. |
+| Source revision and automated checks | Video implementation `c1be38b`: 95/95 tests, TypeScript, Expo Doctor 21/21 and web/iOS/Android exports. Moderation follow-up: 60/60 targeted tests and 8/8 live provider cases. Native release audit: 12/12 configuration/selection tests. Current store-build source: `e753873`. |
+| Deployed backend revision and date | `7e3d78d`, September 22 at 11:53:40 PM EDT; deployment Live after 1m05s. Hybrid photo/text screening active; video automation disabled. Live private-video API checks 6/6 passed. |
+| Live video/poster restore drill | Isolated synthetic R2 MP4/poster round trip passed and cleaned up. Fresh production snapshot with 11 images, 4 videos and their 4 posters also passed isolated restore verification. |
+| Signed iPhone build and installation | Ad hoc 0.4.0 (4) installed and exercised by owner. App Store distribution 0.4.0 (5) and EAS submission finished; Apple processing Complete; Waiting for Review. |
+| Physical iPhone checklist | Owner-reported cellular sign-in, short recording with sound, private-draft persistence/playback/seeking and audio stop passed. Remaining checks and device/OS details unverified. |
+| App Store Connect privacy/review update | Beta Description, Review Notes, What to Test and privacy URL saved. Data-collection categories remain proposed. |
+| TestFlight build/status | 0.4.0 (5) Waiting for Review on September 23; automatic notification disabled, new tester availability pending. Existing 0.3.0 (2) unchanged. Existing group invitation link was already enabled and was not changed. |
+
+- September 23, 12:06 AM EDT: Apple upload processing Complete; build 5 submitted for Crewroom Private Beta (4 testers), **Waiting for Review**. What to Test saved. Automatic notification is disabled while the owner’s public-video/camera-cancel confirmation is pending. The live public feed returns two approved videos and anonymous MP4 range requests return HTTP 206. Follow the remaining distribution steps in [TESTFLIGHT-0.4.0.md](TESTFLIGHT-0.4.0.md).

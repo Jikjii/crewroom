@@ -1,5 +1,7 @@
 # Crewroom 0.3: from laptop preview to a phone beta
 
+**Current release work:** see [TESTFLIGHT-0.4.0.md](TESTFLIGHT-0.4.0.md) for the video/hybrid-moderation iPhone beta, physical-test evidence and submitted App Store distribution build 0.4.0 (5), which is **Waiting for Review** as of September 23, 12:06 AM EDT. The 0.3 status below is a **historical snapshot from September 18, 2026**; its Apple review/tester status is not the current release status.
+
 The hosted beta is live at **https://joincrewroom.com** with saved **System / Light / Dark** appearance, account deletion, working password-reset email, and public policy/support routes. Expo is linked and native build profiles target the hosted service. iPhone App Store distribution **0.3.0 (2)** is uploaded and processed by Apple. As of September 18, 2026 at 12:26 PM EDT, it is **Waiting for Review** in the private external TestFlight group **Crewroom Private Beta**. Three authorized testers are added and automatic notification is configured, but Apple currently shows **No Builds Available** for them. No public invitation link is enabled; approval and invitation delivery are not yet confirmed.
 
 ## Hosted server status
