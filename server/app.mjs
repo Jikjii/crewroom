@@ -19,6 +19,7 @@ import path from "node:path";
 import { createSocial } from "./social.mjs";
 import { createAccounts, releaseReadiness } from "./accounts.mjs";
 import { createBeta, serveBetaPage } from "./beta.mjs";
+import { createModerationAdmin, serveModerationPage } from './moderation-admin.mjs';
 
 const derive = promisify(scrypt);
 const digest = (value) => createHash("sha256").update(value).digest("hex");
@@ -130,6 +131,10 @@ export function createApp({
   rateLimit = 30,
   now = () => Date.now(),
   logger = console,
+  moderationMode = 'manual',
+  moderationProvider,
+  moderationOperatorIds = [],
+  moderationPollMs,
 } = {}) {
   if (production) {
     const readiness = releaseReadiness({ production, appOrigin, secureCookies, mailSender, operatorName, supportEmail, minimumAge, privacyPolicyUrl, termsUrl, policyVersion, requirePolicyAcceptance, policiesApproved });
@@ -624,14 +629,18 @@ export function createApp({
   }
   const resolvedMediaDir = mediaDir || path.join(dbPath === ':memory:' ? path.resolve('.data') : path.dirname(path.resolve(dbPath)), 'media');
   const social = createSocial({ db, get, all, run, insert, transaction, id, stamp, now, fail, string, date, own, send, body, mutation, limited, addMember, activity,
-    mediaDir: resolvedMediaDir, dbPath,
+    mediaDir: resolvedMediaDir, dbPath, moderationMode, moderationProvider, moderationPollMs,
   });
   const accounts = createAccounts({ db, get, all, run, insert, transaction, id, stamp, now, fail, string, send, body, mutation, limited, cookie, derive, digest, secret, timingSafeEqual,
+    onAccountDeleted: userId => social.moderation.cancelAuthor(userId),
     mediaDir: resolvedMediaDir, appOrigin, logger, production, secureCookies, mailSender, operatorName, supportEmail, minimumAge, privacyPolicyUrl, termsUrl, policyVersion, requirePolicyAcceptance, policiesApproved, resetTokenTtlMs,
   });
   accounts.cleanupFiles().catch(() => logger.warn?.("Account media cleanup remains pending."));
   const beta = createBeta({ db, get, all, run, transaction, id, now, digest, secret, fail, string, send, body, limited,
     appOrigin, mailSender, supportEmail, minimumAge, production, logger });
+  const moderationAdmin = createModerationAdmin({ db, mediaDir: resolvedMediaDir, operatorIds: moderationOperatorIds,
+    send, body, mutation, fail, limited, now, onDecision: change => social.moderation.cancel(change),
+    retryScreening: social.moderation.config().automaticScreening ? ({ type, id: targetId }) => social.moderation.enqueue(type, targetId) : undefined });
   const server = http.createServer(async (req, res) => {
     res.setHeader("X-Content-Type-Options", "nosniff");
     res.setHeader("Referrer-Policy", "same-origin");
@@ -662,6 +671,7 @@ export function createApp({
       const url = new URL(req.url, "http://localhost"),
         pathname = url.pathname;
       if (!pathname.startsWith("/api/")) {
+        if (serveModerationPage(req, res, pathname)) return;
         if (serveBetaPage(req, res, pathname)) return;
         if (serveStatic(req, res, pathname)) return;
         fail(404, "Not found.");
@@ -672,6 +682,7 @@ export function createApp({
       const context = auth(req),
         { user } = context;
       if (await accounts(req, res, url, context)) return;
+      if (await moderationAdmin(req, res, url, context)) return;
       if (await social(req, res, url, context)) return;
       if (pathname === "/api/session" && req.method === "GET")
         return send(res, 200, {
@@ -1162,6 +1173,6 @@ export function createApp({
   // Mobile video bodies are streamed with their own 120-second and 50 MB bounds.
   server.requestTimeout = 125_000;
   server.headersTimeout = 15_000;
-  server.on("close", () => { beta.close(); db.close(); });
+  server.on("close", () => { social.moderation.close(); beta.close(); db.close(); });
   return server;
 }

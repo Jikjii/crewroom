@@ -30,6 +30,8 @@ At startup, the backend removes interrupted uploads from its strictly named `.vi
 
 ## Operator review: watch the whole video
 
+The prepared hybrid-moderation follow-up adds a browser review desk and optional automated screening; see [HYBRID-MODERATION.md](HYBRID-MODERATION.md). It is not included in signed candidate 0.4.0 (3) and has not been activated. The instructions below continue to apply to human video reviews, including videos held by the automatic checks.
+
 Continue the daily pending-submission and report checks described in `MODERATION.md`. For video, reading the caption or checking the poster is insufficient. Watch the **entire processed clip with sound**, inspect the poster, and read its title, notes, alternative description, credits, and collaboration fields before approval. Review the actual processed file referenced by the inspection, not a creator's separate social-media copy.
 
 On Render, list pending submissions and inspect the exact post ID returned by the queue:

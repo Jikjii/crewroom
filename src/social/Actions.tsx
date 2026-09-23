@@ -138,19 +138,23 @@ export function ReportSheet({
   return (
     <Sheet title="Report a concern" onClose={onClose} busy={busy}>
       <Text style={x.body}>
-        Reports are saved for the pilot’s moderator. A reported post will be
-        hidden from your view; a report does not automatically remove anyone
-        else’s work.
+        Reports go to Crewroom’s moderation queue. Reporting helps us review
+        harmful content; you can also block its creator. For immediate danger,
+        contact local emergency services.
       </Text>
       <ErrorNotice message={error} />
       <View style={x.wrap}>
-        {(["harassment", "stolen-work", "spam", "other"] as const).map(
+        {(["harassment", "sexual-content", "threats", "hate", "child-safety", "stolen-work", "spam", "other"] as const).map(
           (value) => (
             <Choice
               key={value}
               label={
                 {
                   harassment: "Harassment",
+                  "sexual-content": "Sexual content",
+                  threats: "Threats or violence",
+                  hate: "Hate or discrimination",
+                  "child-safety": "Child safety",
                   "stolen-work": "Stolen work",
                   spam: "Spam",
                   other: "Other",

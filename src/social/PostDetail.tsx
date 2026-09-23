@@ -25,10 +25,14 @@ import {
   Spinner,
   messageOf,
   needsReview,
+  publicationMessage,
   stageName,
   useResource,
+  isScreening,
+  useScreeningRefresh,
 } from "./shared";
 import { useSocialStyles } from "./styles";
+import { useModerationPolicy } from "./moderationPolicy";
 
 interface Props {
   id: string;
@@ -66,6 +70,7 @@ export default function PostDetail({
 }: Props) {
   const { C } = useUI();
   const x = useSocialStyles();
+  const moderation = useModerationPolicy();
   const v = useMemo(() => detailStyles(C), [C]);
   const scrollRef = useRef<ScrollView>(null);
   const commentsY = useRef(0);
@@ -84,6 +89,8 @@ export default function PostDetail({
     own = !!user && post?.author.userId === user.id;
   const reviewBlocked =
     !!post && (needsReview(post) || needsReview(post.author));
+  useScreeningRefresh(Boolean((own && (isScreening(post) || isScreening(post?.author))) ||
+    comments.some(c => c.author.userId === user?.id && isScreening(c))), resource.reload);
   const shareable =
     !!post &&
     (post.isExample ||
@@ -112,11 +119,7 @@ export default function PostDetail({
       setComment("");
       await resource.reload();
       onChanged();
-      notify(
-        saved.reviewStatus === "pending"
-          ? "Comment submitted for review. Only you can see it until approved."
-          : "Comment saved.",
-      );
+      notify(publicationMessage(saved, "Comment"));
     });
   };
   const follow = async () => {
@@ -206,7 +209,7 @@ export default function PostDetail({
               <View style={x.soft}>
                 <Text style={x.label}>Hidden by your private profile</Text>
                 <Text style={x.small}>
-                  Only you can see this work. Submit your profile for public
+                  Only you can see this work. Make your profile available for public
                   sharing when you’re ready.
                 </Text>
               </View>
@@ -568,14 +571,16 @@ export default function PostDetail({
             />
             <Button
               title={
-                busy === "comment" ? "Submitting…" : "Submit comment for review"
+                busy === "comment" ? "Posting…" : "Post comment"
               }
               disabled={!!busy || !comment.trim()}
               onPress={() => void addComment()}
             />
             <Text style={x.small}>
-              Comments appear to others after review. You can see and delete
-              your own comment while it awaits approval.
+              {moderation.automatic
+                ? "Comments publish when safety checks pass. Flagged comments may need review."
+                : "Comments appear to others once approved."} You can see and
+              delete your own comment while it awaits approval.
             </Text>
           </View>
         </View>

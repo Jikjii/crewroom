@@ -3,14 +3,21 @@ export type ContentReviewStatus = "pending" | "approved" | "rejected";
 /** Review details are returned only to the owner of real public content. */
 export interface ContentReview {
   reviewStatus?: ContentReviewStatus;
+  reviewStage?: "queued" | "checking" | "held" | "published";
   reviewReason?: string;
+}
+export interface ModerationConfig {
+  mode: "manual" | "hybrid";
+  automaticScreening: boolean;
+  automaticVideoScreening?: boolean;
+  provider: "sightengine" | null;
 }
 export type CreativeStage = "wip" | "finished" | "tutorial";
 export type CollaborationStatus =
   "pending" | "accepted" | "declined" | "cancelled";
 export type CollaborationAction = "accept" | "decline" | "cancel";
 export type ReportTarget = "post" | "profile" | "comment";
-export type ReportReason = "harassment" | "stolen-work" | "spam" | "other";
+export type ReportReason = "harassment" | "sexual-content" | "threats" | "hate" | "child-safety" | "stolen-work" | "spam" | "other";
 
 export interface CreatorProfile extends ContentReview {
   userId: string;

@@ -57,6 +57,17 @@ test("trusted-proxy IP selection ignores forged leftmost values and rejects malf
     assert.equal(getClientIp({ ...req, headers: { "x-forwarded-for": value } }, 1), "10.0.0.2");
 });
 
+test('hybrid moderation activation requires an operator ID and explicit provider approval', async t => {
+  const root = await temporary(t), env = production(path.join(root, 'data'));
+  assert.equal(loadRuntime(env, root).moderationMode, 'manual');
+  assert.throws(() => loadRuntime({ ...env, MODERATION_MODE: 'anything' }, root), /MODERATION_MODE/);
+  assert.throws(() => loadRuntime({ ...env, MODERATION_OPERATOR_IDS: 'support@joincrewroom.com' }, root), /immutable/);
+  assert.throws(() => loadRuntime({ ...env, MODERATION_MODE: 'hybrid' }, root), /assigned operator/);
+  assert.throws(() => loadRuntime({ ...env, MODERATION_MODE: 'hybrid', MODERATION_OPERATOR_IDS: 'user_operator' }, root), /APPROVED/);
+  const config = loadRuntime({ ...env, MODERATION_MODE: 'hybrid', MODERATION_OPERATOR_IDS: 'user_operator', MODERATION_PROVIDER_APPROVED: 'true' }, root);
+  assert.deepEqual(config.moderationOperatorIds, ['user_operator']);
+});
+
 test("online SQLite backup includes committed WAL data and referenced photos, then restores without overwrite", async (t) => {
   const root = await temporary(t);
   const live = path.join(root, "live"), mediaDir = path.join(live, "media"), dbPath = path.join(live, "crewroom.sqlite");

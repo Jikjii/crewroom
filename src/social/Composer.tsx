@@ -33,6 +33,7 @@ import {
 import { useSocialStyles } from "./styles";
 import VideoPlayer from "./VideoPlayer";
 import { validateVideoSelection } from "./videoSelection";
+import { useModerationPolicy } from "./moderationPolicy";
 
 type PendingVideo = ImagePicker.ImagePickerAsset & { fileSize: number };
 
@@ -49,6 +50,7 @@ export default function Composer({
 }) {
   const { C } = useUI();
   const x = useSocialStyles();
+  const moderation = useModerationPolicy();
   const profile = useResource(() => socialApi.getMe(), [user.id]);
   const [title, setTitle] = useState(post?.title || ""),
     [character, setCharacter] = useState(post?.character || ""),
@@ -78,6 +80,7 @@ export default function Composer({
   const activeMediaIndex = activeMedia ? media.indexOf(activeMedia) : 0;
   const hasVideo =
     !!pendingVideo || media.some((asset) => asset.kind === "video");
+  const automaticSharing = hasVideo ? moderation.automaticVideo : moderation.automatic;
   const lock = useRef(false);
   const pick = async () => {
     if (lock.current || media.length >= 4 || hasVideo) return;
@@ -242,7 +245,7 @@ export default function Composer({
       !consent
     ) {
       setError(
-        "Choose to submit your creator profile for public sharing, or save a private draft.",
+        "Choose to make your creator profile public, or save a private draft.",
       );
       return;
     }
@@ -831,14 +834,16 @@ export default function Composer({
                   ? "Private draft"
                   : user.isDemo
                     ? "Preview a public post"
-                    : "Submit for public sharing"}
+                    : "Public post"}
               </Text>
               <Text style={x.small}>
                 {value === "private"
                   ? "Only you. Take your time."
                   : user.isDemo
                     ? "Still visible only inside your private demo."
-                    : "Only you until Crewroom approves your work and profile. Then anyone can view it."}
+                    : automaticSharing
+                      ? "Anyone can view it once your post and profile pass safety checks."
+                      : "Anyone can view it once your post and profile are approved."}
               </Text>
             </View>
             <Icon
@@ -852,12 +857,10 @@ export default function Composer({
       </View>
       {visibility === "public" && !user.isDemo && (
         <View style={x.soft}>
-          <Text style={x.label}>Reviewed before it’s shared</Text>
+          <Text style={x.label}>Checked before sharing</Text>
           <Text style={x.small}>
-            We review public {hasVideo ? "videos" : "photos"}, making notes, and
-            credits before they appear to others. Editing public work sends it
-            back for review and hides it until approved again. You can save a
-            private draft at any time.
+            {hasVideo ? moderation.videoSharingSummary : moderation.sharingSummary} Public edits are checked again before
+            they appear to others.
           </Text>
         </View>
       )}
@@ -876,7 +879,7 @@ export default function Composer({
           <Text style={[x.body, { flex: 1 }]}>
             {user.isDemo
               ? "Preview my creator profile as public within this demo."
-              : "Submit my creator profile for public sharing too. After approval, my display name, bio, roles, links, and broad city will be visible. Private crew plans stay private."}
+              : "Make my creator profile public too. Once approved, my display name, bio, roles, links, and broad city will be visible. Private crew plans stay private."}
           </Text>
         </Pressable>
       )}
@@ -899,7 +902,9 @@ export default function Composer({
               ? "Save it for yourself. Share when you’re ready."
               : user.isDemo
                 ? "This preview stays inside your private demo."
-                : "Your work stays private until it’s reviewed."}
+                : automaticSharing
+                  ? "Your post publishes when its safety checks and profile checks pass."
+                  : "Your post stays visible only to you until approved."}
         </Text>
         <Button
           title={
@@ -912,8 +917,8 @@ export default function Composer({
                 : user.isDemo
                   ? "Save demo preview"
                   : post
-                    ? "Submit changes for review"
-                    : "Submit my work for review"
+                    ? "Publish changes"
+                    : "Publish post"
           }
           disabled={
             busy ||

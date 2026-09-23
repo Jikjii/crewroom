@@ -14,6 +14,7 @@ import {
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
 import { getPublicWebUrl, mediaSource, socialApi } from "../api";
+import { isScreening, useScreeningRefresh } from './shared';
 import type { User } from "../types";
 import type { Palette } from "../theme";
 import { Avatar, Button, Empty, Field, Icon, Tag, useUI } from "../ui";
@@ -33,9 +34,11 @@ import {
   ToggleButton,
   messageOf,
   needsReview,
+  reviewLabel,
   useResource,
 } from "./shared";
 import { useSocialStyles } from "./styles";
+import { useModerationPolicy } from "./moderationPolicy";
 
 interface Props {
   user: User | null;
@@ -87,6 +90,7 @@ export default function Profile({
   const profile = resource.data?.profile,
     posts = resource.data?.posts || [];
   const own = !!user && profile?.userId === user.id;
+  useScreeningRefresh(own && (isScreening(profile) || posts.some(isScreening)), resource.reload);
   const [error, setError] = useState(""),
     [busy, setBusy] = useState(false),
     [copied, setCopied] = useState(false),
@@ -174,7 +178,7 @@ export default function Profile({
       {!user && !handle ? (
         <AccountPrompt
           title="Make a little space for your work"
-          text="Create a profile, keep private drafts, and submit work for public sharing when you’re ready."
+          text="Create a profile, keep private drafts, and publish your work when you’re ready."
           onPress={onAccount}
         />
       ) : resource.loading && !profile ? (
@@ -246,9 +250,7 @@ export default function Profile({
                           {user?.isDemo
                             ? "Demo profile"
                             : needsReview(profile)
-                              ? profile.reviewStatus === "rejected"
-                                ? "Not approved"
-                                : "Awaiting review"
+                              ? reviewLabel(profile)
                               : profile.visibility === "public"
                                 ? "Public profile"
                                 : "Private profile"}
@@ -417,7 +419,7 @@ export default function Profile({
                   <Text style={x.label}>A home before an audience</Text>
                   <Text style={x.small}>
                     Your profile and work are visible only to you. Edit your
-                    profile and submit it for review whenever you want to become
+                    profile and make it public whenever you want to become
                     discoverable.
                   </Text>
                 </View>
@@ -680,6 +682,7 @@ export function EditProfile({
 }) {
   const { C } = useUI();
   const x = useSocialStyles();
+  const moderation = useModerationPolicy();
   const [name, setName] = useState(profile.displayName),
     [handle, setHandle] = useState(profile.handle),
     [bio, setBio] = useState(profile.bio),
@@ -728,8 +731,8 @@ export function EditProfile({
           <Text style={x.label}>Choose how you want to connect</Text>
           <Text style={x.small}>
             Following, commenting, and collaboration requests use your public
-            creator identity. To connect, turn on “Submit my profile for public
-            sharing” below and submit it for review. Once approved, you can
+            creator identity. To connect, turn on “Make my profile public”
+            below and save. Once your profile is approved, you can
             connect with other creators. You can keep your profile private and
             still browse, save inspiration, and work on drafts.
           </Text>
@@ -796,19 +799,21 @@ export function EditProfile({
             <Text style={x.label}>
               {user.isDemo
                 ? "Preview a public profile"
-                : "Submit my profile for public sharing"}
+                : "Make my profile public"}
             </Text>
             <Text style={x.small}>
               {user.isDemo
                 ? "Preview only: your demo stays visible to you."
-                : "After review, anyone can browse your profile and approved work."}
+                : moderation.automatic
+                  ? "Anyone can browse your profile and published work once safety checks pass."
+                  : "Anyone can browse your profile and published work once approved."}
             </Text>
           </View>
           <Switch
             accessibilityLabel={
               user.isDemo
                 ? "Preview a public profile"
-                : "Submit my profile for public sharing"
+                : "Make my profile public"
             }
             value={visibility === "public"}
             onValueChange={(value) =>
@@ -822,7 +827,7 @@ export function EditProfile({
         <Text style={x.small}>
           {user.isDemo
             ? "Your profile stays inside your private demo."
-            : "Your display name, bio, roles, interests, broad city, and links become visible after approval. Editing a public profile sends it back for review and hides your profile, public work, and comments until approved again. Private drafts stay private. Making this profile private hides previously published work too."}
+            : `Your display name, bio, roles, interests, broad city, and links become visible once approved. ${moderation.sharingSummary} Public edits are checked again. A profile held for review also hides your public work and comments. Making your profile private hides previously published work too.`}
         </Text>
         <View style={x.divider} />
         <View style={x.toolbar}>
@@ -847,7 +852,7 @@ export function EditProfile({
               ? "Submitting…"
               : "Saving…"
             : visibility === "public" && !user.isDemo
-              ? "Submit profile for review"
+              ? "Save public profile"
               : "Save profile"
         }
         disabled={busy}

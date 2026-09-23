@@ -439,6 +439,8 @@ function socialQuery(
   return search.size ? `?${search.toString()}` : "";
 }
 export const socialApi = {
+  getModerationConfig: (): Promise<import("./social/types").ModerationConfig> =>
+    request("/api/social/moderation-config"),
   getMe: (): Promise<CreatorProfile> => request("/api/social/me"),
   updateMe: (input: UpdateProfileInput): Promise<CreatorProfile> =>
     request("/api/social/me", { method: "PATCH", body: input }),

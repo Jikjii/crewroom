@@ -22,7 +22,7 @@ import {
   RequestSheet,
   SettingsSheet,
 } from "./Actions";
-import { messageOf } from "./shared";
+import { messageOf, needsReview, publicationMessage, reviewLabel } from "./shared";
 import { useSocialStyles } from "./styles";
 
 type Route = { type: "post" | "profile"; value: string };
@@ -143,11 +143,11 @@ export default function SocialExperience({
     try {
       const me = await socialApi.getMe();
       if (current !== generation.current) return false;
-      if (me.visibility === "public" && me.reviewStatus === "approved")
+      if (me.visibility === "public" && me.reviewStatus === "approved" && !needsReview(me))
         return true;
       if (me.visibility === "public" && me.reviewStatus === "pending") {
         notify(
-          "Your profile is awaiting review. Following, comments, and collaboration requests become available after approval.",
+          `${reviewLabel(me)}. Following, comments, and collaboration requests become available once your profile is approved.`,
         );
         return false;
       }
@@ -155,7 +155,7 @@ export default function SocialExperience({
       notify(
         me.reviewStatus === "rejected"
           ? "Update your profile and submit it again for review before connecting."
-          : "Submit your creator profile for review before connecting with other creators.",
+          : "Make your creator profile public before connecting with other creators.",
       );
       return false;
     } catch (e) {
@@ -402,7 +402,10 @@ export default function SocialExperience({
                 ? "Private draft saved."
                 : user.isDemo
                   ? "Demo preview saved. Only you can see it."
-                  : "Work submitted for review. Only you can see it until approved.",
+                  : post.reviewStatus === "approved" && !needsReview(post) &&
+                      (post.author.visibility !== "public" || needsReview(post.author))
+                    ? "Post saved. It stays visible only to you until your profile is public and approved."
+                    : publicationMessage(post, "Post"),
             );
           }}
         />
@@ -426,7 +429,7 @@ export default function SocialExperience({
               profile.visibility === "public"
                 ? user.isDemo
                   ? "Demo profile preview saved."
-                  : "Profile submitted for review. Your profile and public content stay hidden until approved."
+                  : publicationMessage(profile, "Profile")
                 : "Your profile is private.",
             );
           }}

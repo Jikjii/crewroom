@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  AppState,
   Image,
   KeyboardAvoidingView,
   Modal,
@@ -33,7 +34,24 @@ export const messageOf = (error: unknown) =>
     : "Something went wrong. Please try again.";
 
 export const needsReview = (content: ContentReview) =>
-  content.reviewStatus === "pending" || content.reviewStatus === "rejected";
+  content.reviewStatus === "pending" || content.reviewStatus === "rejected" ||
+  content.reviewStage === "queued" || content.reviewStage === "checking" || content.reviewStage === "held";
+
+export const reviewLabel = (content: ContentReview) =>
+  content.reviewStatus === "rejected" ? "Not published"
+    : content.reviewStage === "checking" ? "Safety checks in progress"
+      : content.reviewStage === "queued" ? "Waiting for safety checks"
+        : "Needs review";
+
+export function publicationMessage(content: ContentReview, subject: "Post" | "Profile" | "Comment") {
+  if (content.reviewStatus === "approved" && !needsReview(content))
+    return `${subject} published.`;
+  if (content.reviewStatus === "rejected")
+    return `${subject} saved but not published. Open it to see the review note.`;
+  if (content.reviewStage === "checking" || content.reviewStage === "queued")
+    return `${subject} saved. Safety checks are running; only you can see it until they pass.`;
+  return `${subject} saved for review. Only you can see it until approved.`;
+}
 
 export function ReviewNotice({
   content,
@@ -57,7 +75,7 @@ export function ReviewNotice({
           size={18}
         />
         <Text style={x.label}>
-          {name} {rejected ? "not approved" : "awaiting review"}
+          {name} · {reviewLabel(content)}
         </Text>
       </View>
       <Text style={x.small}>
@@ -68,7 +86,9 @@ export function ReviewNotice({
           ? subject === "comment"
             ? " Delete it and submit a revised comment."
             : ` Edit your ${subject} and submit it again for review.`
-          : " Crewroom reviews public content before it appears to others."}
+          : content.reviewStage === "checking" || content.reviewStage === "queued"
+            ? " Safety checks are running. Refresh to check its status."
+            : " Crewroom needs to review this submission before sharing it."}
       </Text>
       {!!content.reviewReason && (
         <Text style={[x.small, { color: C.ink }]}>
@@ -113,6 +133,27 @@ export function useResource<T>(
   }, deps);
   return { data, setData, loading, error, reload };
 }
+
+/** Refresh only actively screened content; held submissions do not poll indefinitely. */
+export function useScreeningRefresh(active: boolean, reload: () => Promise<unknown>) {
+  useEffect(() => {
+    if (!active) return;
+    let stopped = false, count = 0;
+    let timer: ReturnType<typeof setTimeout>;
+    const schedule = () => {
+      timer = setTimeout(async () => {
+        if (stopped || count++ >= 45) return;
+        if (AppState.currentState === 'active' || Platform.OS === 'web') await reload();
+        if (!stopped) schedule();
+      }, 4000);
+    };
+    schedule();
+    return () => { stopped = true; clearTimeout(timer); };
+  }, [active, reload]);
+}
+
+export const isScreening = (content?: ContentReview | null) =>
+  content?.reviewStage === 'queued' || content?.reviewStage === 'checking';
 
 export function ErrorNotice({
   message,
@@ -417,12 +458,8 @@ export function WorkCard({
               <View style={x.imageBadge}>
                 <Text style={x.badgeText}>
                   {needsReview(post)
-                    ? post.reviewStatus === "rejected"
-                      ? "Not approved"
-                      : "Awaiting review"
-                    : post.author.reviewStatus === "rejected"
-                      ? "Profile not approved"
-                      : "Profile awaiting review"}
+                    ? reviewLabel(post)
+                    : `Profile · ${reviewLabel(post.author)}`}
                 </Text>
               </View>
             )}

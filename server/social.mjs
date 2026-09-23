@@ -4,6 +4,7 @@ import { mkdirSync, existsSync, createReadStream } from "node:fs";
 import { writeFile, unlink } from "node:fs/promises";
 import sharp from "sharp";
 import { migrateContentReview } from "./content-review.mjs";
+import { createModeration } from "./moderation.mjs";
 import { createVideoProcessor, streamVideo, VIDEO_MAX_BYTES, VIDEO_MAX_DURATION } from "./video.mjs";
 
 const EXAMPLES = new Set([
@@ -40,6 +41,9 @@ export function createSocial({
   activity,
   mediaDir,
   dbPath,
+  moderationMode,
+  moderationProvider,
+  moderationPollMs,
 }) {
   mkdirSync(mediaDir, { recursive: true });
   db.exec(`
@@ -110,6 +114,7 @@ export function createSocial({
   if (!mediaColumns.has("posterFilename")) db.exec("ALTER TABLE social_media ADD COLUMN posterFilename TEXT");
   const videoProcessor = createVideoProcessor({ mediaDir, dbPath });
   migrateContentReview(db);
+  const moderation = createModeration({ db, mediaDir, mode: moderationMode, provider: moderationProvider, now, pollMs: moderationPollMs });
 
   function profileRow(userId) {
     return get(
@@ -168,6 +173,7 @@ export function createSocial({
       !profile.suspendedAt &&
       profile.visibility === "public" &&
       profile.reviewStatus === "approved" &&
+      !(viewer && get("SELECT 1 FROM social_reports WHERE reporterId=? AND targetType='profile' AND targetId=?", viewer.id, profile.userId)) &&
       !blocked(viewer?.id, profile.userId)
     );
   }
@@ -283,6 +289,7 @@ export function createSocial({
   function reviewJSON(record, viewer, authorId) {
     if (viewer?.id !== authorId || viewer.isDemo || record.isExample || record.visibility === "private") return {};
     return { reviewStatus: record.reviewStatus,
+      ...(record.reviewStage ? { reviewStage: record.reviewStage } : {}),
       ...(record.reviewReason ? { reviewReason: record.reviewReason } : {}) };
   }
   function mediaJSON(media, alt = media.alt) {
@@ -311,6 +318,7 @@ export function createSocial({
         !profile.suspendedAt &&
         (!profile.isDemo || viewer?.id === profile.userId) &&
         !blocked(viewer?.id, comment.authorId)
+        && !(viewer && get("SELECT 1 FROM social_reports WHERE reporterId=? AND targetType='comment' AND targetId=?", viewer.id, comment.id))
       );
     });
   }
@@ -511,16 +519,21 @@ export function createSocial({
     if (!Object.keys(fields).length)
       fail(400, "No editable profile fields supplied.");
     fields.reviewStatus = "pending";
+    fields.reviewStage = null;
     fields.reviewReason = null;
     fields.reviewedAt = null;
     fields.updatedAt = stamp();
-    run(
+    transaction(() => {
+      run(
       `UPDATE social_profiles SET ${Object.keys(fields)
         .map((key) => `${key}=?`)
         .join(",")} WHERE userId=?`,
       ...Object.values(fields),
       profile.userId,
     );
+    if (fields.visibility === 'private') moderation.cancelAuthor(profile.userId);
+    moderation.enqueue('profile', profile.userId);
+    });
     return profileRow(user.id);
   }
   function validateCredits(value, viewer) {
@@ -658,13 +671,15 @@ export function createSocial({
     const { fields, mediaIds, alts } = editablePost(user, data, previous);
     return transaction(() => {
       if (data.publishProfile === true)
-        run(
+        { const changed = run(
           "UPDATE social_profiles SET visibility='public',reviewStatus='pending',reviewReason=NULL,reviewedAt=NULL,updatedAt=? WHERE userId=? AND visibility<>'public'",
           stamp(),
           user.id,
         );
+        if (changed.changes) moderation.enqueue('profile', user.id); }
       const postId = previous?.id || id("post");
       fields.reviewStatus = "pending";
+      fields.reviewStage = null;
       fields.reviewReason = null;
       fields.reviewedAt = null;
       if (previous) {
@@ -696,6 +711,7 @@ export function createSocial({
           alt: alts[position],
         }),
       );
+      moderation.enqueue('post', postId);
       return get("SELECT * FROM social_posts WHERE id=?", postId);
     });
   }
@@ -839,6 +855,8 @@ export function createSocial({
       if (!user) fail(401, "Sign in to continue.");
       return ensureProfile(user);
     };
+    if (pathname === '/api/social/moderation-config' && req.method === 'GET')
+      return respond(200, moderation.config());
 
     const exampleMatch = pathname.match(/^\/api\/social\/examples\/([^/]+)$/);
     if (exampleMatch && ["GET", "HEAD"].includes(req.method)) {
@@ -1150,6 +1168,7 @@ export function createSocial({
     }
     if (pathname === "/api/social/posts" && req.method === "POST") {
       requireUser();
+      limited(req, `publish:${user.id}`, 30);
       return respond(201, postJSON(persistPost(user, await body(req)), user));
     }
     const postMatch = pathname.match(/^\/api\/social\/posts\/([^/]+)$/);
@@ -1176,6 +1195,7 @@ export function createSocial({
           stamp(),
           post.id,
         );
+        moderation.cancel({ type: 'post', id: post.id });
         return respond(200, { ok: true });
       }
     }
@@ -1254,7 +1274,7 @@ export function createSocial({
       contactTarget(target, user);
       const text = string(data.body, "comment", { required: true, max: 2000 });
       const comment = transaction(() => {
-        return insert("social_comments", {
+        const created = insert("social_comments", {
           id: id("comment"),
           postId: post.id,
           authorId: user.id,
@@ -1263,6 +1283,8 @@ export function createSocial({
           createdAt: stamp(),
           deletedAt: null,
         });
+        moderation.enqueue('comment', created.id);
+        return get('SELECT * FROM social_comments WHERE id=?', created.id);
       });
       return respond(201, commentJSON(comment, user));
     }
@@ -1560,6 +1582,10 @@ export function createSocial({
           required: true,
           max: 100,
         });
+      // Idempotent reporting: repeat taps cannot inflate priority or defeat own-view hiding.
+      const existingReport = get('SELECT id FROM social_reports WHERE reporterId=? AND targetType=? AND targetId=?', user.id, targetType, targetId);
+      if (existingReport) return respond(200, { ok: true });
+      limited(req, `report:${user.id}`, 20);
       if (targetType === "post")
         requirePost(targetId, user, { ignoreReport: true });
       if (targetType === "profile") requireProfile(targetId, user);
@@ -1574,7 +1600,7 @@ export function createSocial({
       }
       const reason = enumValue(
         data.reason,
-        ["harassment", "stolen-work", "spam", "other"],
+        ["harassment", "stolen-work", "spam", "sexual-content", "threats", "hate", "child-safety", "other"],
         "report reason",
       );
       insert("social_reports", {
@@ -1677,5 +1703,6 @@ export function createSocial({
       userId,
     );
   };
+  route.moderation = moderation;
   return route;
 }

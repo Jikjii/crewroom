@@ -83,6 +83,13 @@ export function loadRuntime(env = process.env, root = process.cwd()) {
   }
   if (Boolean(env.RESEND_API_KEY) !== Boolean(env.MAIL_FROM))
     throw new Error("Configure RESEND_API_KEY and MAIL_FROM together, or leave both unset.");
+  const moderationMode = env.MODERATION_MODE?.trim() || 'manual';
+  if (!['manual', 'hybrid'].includes(moderationMode)) throw new Error('MODERATION_MODE must be manual or hybrid.');
+  const moderationOperatorIds = (env.MODERATION_OPERATOR_IDS || '').split(',').map(v => v.trim()).filter(Boolean);
+  if (moderationOperatorIds.some(v => !/^user_[a-zA-Z0-9-]{1,100}$/.test(v)))
+    throw new Error('MODERATION_OPERATOR_IDS must contain immutable user IDs, not email addresses.');
+  if (production && moderationMode === 'hybrid' && (!moderationOperatorIds.length || env.MODERATION_PROVIDER_APPROVED !== 'true'))
+    throw new Error('Hybrid moderation needs an assigned operator and explicit MODERATION_PROVIDER_APPROVED=true after reviewing provider cost, processing and policies.');
   return {
     production, port, host: env.HOST || (production ? "0.0.0.0" : "127.0.0.1"),
     dbPath, mediaDir, staticDir: path.join(root, "dist"), appOrigin, origins,
@@ -91,5 +98,6 @@ export function loadRuntime(env = process.env, root = process.cwd()) {
     minimumAge: integer(env.MINIMUM_AGE, "MINIMUM_AGE", 18, 18, 99),
     policyVersion: env.POLICY_VERSION?.trim() || "beta-1", requirePolicyAcceptance: production,
     policiesApproved: env.POLICIES_APPROVED === "true",
+    moderationMode, moderationOperatorIds,
   };
 }

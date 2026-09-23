@@ -51,6 +51,7 @@ export function createAccounts({ db, get, all, run, insert, transaction, id, sta
   privacyPolicyUrl = '', termsUrl = '', policyVersion = POLICY_DEFAULT, requirePolicyAcceptance = production,
   policiesApproved = false,
   resetTokenTtlMs = 30 * 60_000,
+  onAccountDeleted,
 }) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS account_password_resets (
@@ -141,6 +142,17 @@ export function createAccounts({ db, get, all, run, insert, transaction, id, sta
       }
       run(`DELETE FROM social_notifications WHERE userId=? OR actorId=? OR postId IN (${ownPosts}) OR requestId IN (${relatedRequests})`, user.id, user.id, user.id, user.id, user.id, user.id);
       run(`DELETE FROM social_requests WHERE id IN (${relatedRequests})`, user.id, user.id, user.id);
+      // Remove new moderation records before their polymorphic targets/reports disappear.
+      if (get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='social_moderation_audit'")) {
+        run(`DELETE FROM social_moderation_audit WHERE actorId=? OR (targetType IN ('profile','user') AND targetId=?)
+          OR (targetType='post' AND targetId IN (${ownPosts})) OR (targetType='comment' AND targetId IN (${ownComments}))
+          OR (targetType='report' AND targetId IN (SELECT id FROM social_reports WHERE reporterId=? OR (targetType='profile' AND targetId=?)
+          OR (targetType='post' AND targetId IN (${ownPosts})) OR (targetType='comment' AND targetId IN (${ownComments}))))`,
+          user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id, user.id);
+        run('UPDATE social_reports SET reviewedBy=NULL WHERE reviewedBy=?', user.id);
+      }
+      if (get("SELECT 1 FROM sqlite_master WHERE type='table' AND name='social_screening_events'"))
+        run(`DELETE FROM social_screening_events WHERE (targetType='profile' AND targetId=?) OR (targetType='post' AND targetId IN (${ownPosts})) OR (targetType='comment' AND targetId IN (${ownComments}))`, user.id, user.id, user.id, user.id);
       run(`DELETE FROM social_reports WHERE reporterId=? OR (targetType='profile' AND targetId=?) OR (targetType='post' AND targetId IN (${ownPosts})) OR (targetType='comment' AND targetId IN (${ownComments}))`, user.id, user.id, user.id, user.id, user.id);
       run(`DELETE FROM social_content_reviews WHERE (targetType='profile' AND targetId=?) OR (targetType='post' AND targetId IN (${ownPosts})) OR (targetType='comment' AND targetId IN (${ownComments}))`, user.id, user.id, user.id, user.id);
       run('DELETE FROM social_comments WHERE authorId=?', user.id);
@@ -175,6 +187,7 @@ export function createAccounts({ db, get, all, run, insert, transaction, id, sta
       // Remaining profile, session, follow, save, block, and reset rows cascade safely.
       run('DELETE FROM users WHERE id=?', user.id);
     });
+    onAccountDeleted?.(user.id);
     cookie(req, res, '', true);
     await cleanupFiles();
     return { ok: true, mediaCleanupPending: Boolean(get('SELECT 1 FROM account_file_deletions LIMIT 1')) };

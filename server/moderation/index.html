@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Moderation · Crewroom</title>
+  <link rel="stylesheet" href="/moderation/assets/moderation.css">
+  <script src="/moderation/assets/moderation.js" defer></script>
+</head>
+<body>
+  <header><div><a class="brand" href="/">crewroom<span>•</span></a><p class="eyebrow">COMMUNITY CARE</p></div><div class="top-actions"><button id="theme" type="button" aria-label="Change color theme">Theme</button><a href="/">Back to app ↗</a></div></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">OPERATOR WORKSPACE</p><h1>A safer place to create.</h1><p>Review public submissions, respond to reports, and record clear decisions.</p></div><button id="refresh" type="button" hidden>Refresh queue</button></section>
+    <div id="notice" role="status" aria-live="polite">Checking your operator access…</div>
+    <section id="access" class="panel" hidden><h2>Use your operator account</h2><p id="access-copy"></p><a class="button primary" href="/">Open Crewroom to sign in</a></section>
+    <section id="workspace" hidden>
+      <div class="policy"><strong>24-hour internal response target</strong><span>Prioritize urgent safety reports. This is Crewroom’s operating target, not a deadline set by Apple.</span></div>
+      <nav class="tabs" aria-label="Moderation views"><button type="button" data-tab="queue" aria-pressed="true">Review queue <span id="queue-count">0</span></button><button type="button" data-tab="reports" aria-pressed="false">Reports <span id="report-count">0</span></button><button type="button" data-tab="history" aria-pressed="false">History</button></nav>
+      <div class="workspace-grid"><section id="list" aria-label="Items to review"></section><section id="detail" class="panel detail" aria-label="Selected submission"><div class="empty"><span class="empty-icon">✦</span><h2>Every decision leaves a record.</h2><p>Choose a submission or report to inspect its public text and processed media. Private drafts stay outside this workspace.</p></div></section></div>
+    </section>
+  </main>
+  <footer>Operator access is tied to your account ID. All decisions are recorded with your identity and time.</footer>
+</body>
+</html>
