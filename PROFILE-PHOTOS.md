@@ -27,7 +27,13 @@ Images are prepared as JPEGs up to 768×768 on the client, then decoded, sanitiz
 
 ## Release status
 
-The previous sound-fix release 0.4.0 (6) remains Testing. This profile-photo update is not yet recorded as deployed or distributed.
+The profile-photo web/API update is **Live** on `https://joincrewroom.com`. [Render deployment](https://dashboard.render.com/web/srv-damc8mp42hec738hb7mg/deploys/dep-daq4guegekts73bi2fq0) deployed source `ad24ff10dd908aa506ae2dd19d0ccb50af1cba25` on September 23 at 5:45 PM EDT and reported **Deploy succeeded | Live**. The public health endpoint returned `{"ok":true}` and the signed-in live editor showed **Profile photo → Add photo**. This live verification did not modify the owner's profile.
+
+iPhone production **0.4.0 (8)**, [Expo build `16e42e95-7e36-40ef-b402-3102a1cf1cb3`](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/16e42e95-7e36-40ef-b402-3102a1cf1cb3), finished at `2026-09-23T21:47:15.351Z` from the same source. EAS scheduled [submission `8a19936f-ffb2-46f1-a3d4-e7062d3aac88`](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/8a19936f-ffb2-46f1-a3d4-e7062d3aac88) at 5:49 PM EDT for existing Apple app `6813563844`; automatic internal-TestFlight setup is disabled. Expo showed **Queued — Free Tier Queue**. Upload completion, Apple processing and distribution are not yet verified. Physical iPhone camera/library/crop and signed-installation checks remain unverified. The previous sound-fix release 0.4.0 (6) remains the last verified **Testing** build.
+
+After upload completes, save the What to Test notes below and add build 8 to the existing **Crewroom Private Beta** group (`858d3c31-fabf-41d3-8b80-50eff303d459`). Preserve existing testers, older builds, the invitation-link setting and private review information. Complete any required beta review and verify **Testing**; do not create another build/submission or publish a public App Store release.
+
+At approximately 5:56 PM EDT, Expo's workflow still showed **Waiting to start**, with a free-tier queue estimate of about 40 minutes. The owner authorized automatic completion. Existing follow-up `finish-crewroom-testflight-update` was updated to target **build 8** and reactivated every 15 minutes; its earlier build-6 task was already complete. It should notify only on completion, failure or required user action and pause after build 8 is available to the group.
 
 ### What to Test
 

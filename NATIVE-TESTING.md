@@ -1,5 +1,7 @@
 # Crewroom: installable phone beta
 
+**Next update: profile photos.** See [PROFILE-PHOTOS.md](PROFILE-PHOTOS.md) for implementation, validation and deployment/build status. The sound-fix build-6 evidence below remains the last verified TestFlight release.
+
 For the September 22 native video update, follow [TESTFLIGHT-0.4.0.md](TESTFLIGHT-0.4.0.md) for current release evidence and [VIDEO-BETA.md](VIDEO-BETA.md) for the full acceptance checklist. Camera, microphone, video playback and hybrid moderation supersede the photo-only scope below. The September 18 results are historical and do not validate the new video behavior.
 
 **Sound-fix release:** store 0.4.0 (6) is **Testing**, verified September 23 around 2:51 PM EDT in Crewroom Private Beta (5 testers, 3 builds). Expo submission succeeded; Apple records upload at 2:34 PM EDT and processing Complete. Build-6 What to Test is saved, and group submission completed with automatic tester notification selected. No separate manual notification was required; notification receipt is unverified. Store 6 and preview 7 share source `73d469c`. The owner reported the preview-7 checks passing: unmute and swipe forward/back, mute and swipe again, and leave the feed with audio stopping. Device/OS were not supplied; store-6 installation has not been confirmed. The release follow-up is stopped. See [the current release record](TESTFLIGHT-0.4.0.md) for links and results.
