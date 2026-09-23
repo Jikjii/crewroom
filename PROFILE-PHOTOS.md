@@ -1,6 +1,6 @@
 # Profile photos
 
-Prepared September 23, 2026. This update adds profile-photo selection, replacement and removal to the web and native app. Deployment and signed-build status will be recorded below when observed.
+Released September 23, 2026. This update adds profile-photo selection, replacement and removal to the web and native app. The website is Live and iPhone **0.4.0 (8) is Testing** in the existing private beta group. Physical iPhone checks remain unverified.
 
 ## Creator flow
 
@@ -29,11 +29,13 @@ Images are prepared as JPEGs up to 768×768 on the client, then decoded, sanitiz
 
 The profile-photo web/API update is **Live** on `https://joincrewroom.com`. [Render deployment](https://dashboard.render.com/web/srv-damc8mp42hec738hb7mg/deploys/dep-daq4guegekts73bi2fq0) deployed source `ad24ff10dd908aa506ae2dd19d0ccb50af1cba25` on September 23 at 5:45 PM EDT and reported **Deploy succeeded | Live**. The public health endpoint returned `{"ok":true}` and the signed-in live editor showed **Profile photo → Add photo**. This live verification did not modify the owner's profile.
 
-iPhone production **0.4.0 (8)**, [Expo build `16e42e95-7e36-40ef-b402-3102a1cf1cb3`](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/16e42e95-7e36-40ef-b402-3102a1cf1cb3), finished at `2026-09-23T21:47:15.351Z` from the same source. EAS scheduled [submission `8a19936f-ffb2-46f1-a3d4-e7062d3aac88`](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/8a19936f-ffb2-46f1-a3d4-e7062d3aac88) at 5:49 PM EDT for existing Apple app `6813563844`; automatic internal-TestFlight setup is disabled. Expo showed **Queued — Free Tier Queue**. Upload completion, Apple processing and distribution are not yet verified. Physical iPhone camera/library/crop and signed-installation checks remain unverified. The previous sound-fix release 0.4.0 (6) remains the last verified **Testing** build.
+iPhone production **0.4.0 (8)**, [Expo build `16e42e95-7e36-40ef-b402-3102a1cf1cb3`](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/16e42e95-7e36-40ef-b402-3102a1cf1cb3), finished at `2026-09-23T21:47:15.351Z` from the same source. [Submission `8a19936f-ffb2-46f1-a3d4-e7062d3aac88`](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/8a19936f-ffb2-46f1-a3d4-e7062d3aac88) **Succeeded**, verified around 6:42 PM EDT. Expo records submission at 6:13 PM EDT, and Apple records the build upload at 6:13 PM with processing **Complete**. Earlier queue displays were superseded by this successful upload. Automatic internal-TestFlight setup was disabled; the existing external group was configured separately.
 
-After upload completes, save the What to Test notes below and add build 8 to the existing **Crewroom Private Beta** group (`858d3c31-fabf-41d3-8b80-50eff303d459`). Preserve existing testers, older builds, the invitation-link setting and private review information. Complete any required beta review and verify **Testing**; do not create another build/submission or publish a public App Store release.
+Apple build UUID `1d51703b-a378-4fdf-81ff-0c731d642ce0`: the What to Test notes below were saved (Apple showed **Saved**), then build 8 was added to **Crewroom Private Beta** (`858d3c31-fabf-41d3-8b80-50eff303d459`) using **Submit for Review** with **Automatically notify testers** checked. Around 6:45 PM EDT, the [group builds page](https://appstoreconnect.apple.com/teams/a4e81f79-a4b7-4821-9a96-b0ecc9886358/apps/6813563844/testflight/groups/858d3c31-fabf-41d3-8b80-50eff303d459/builds) showed **0.4.0 (8) — Testing**. The group has **5 testers and 4 builds**; 0.4.0 (6), 0.4.0 (5), and 0.3.0 (2) all remain Testing. Existing testers, invitation-link setting and private review credentials were preserved. No separate manual Notify action was required; notification delivery/receipt remains unverified. This completes the existing private beta update, not a public App Store release.
 
-At approximately 5:56 PM EDT, Expo's workflow still showed **Waiting to start**, with a free-tier queue estimate of about 40 minutes. The owner authorized automatic completion. Existing follow-up `finish-crewroom-testflight-update` was updated to target **build 8** and reactivated every 15 minutes; its earlier build-6 task was already complete. It should notify only on completion, failure or required user action and pause after build 8 is available to the group.
+Follow-up `finish-crewroom-testflight-update` was paused after build 8 became available to the group. No duplicate build/submission, account permission change or paid upgrade was made.
+
+Remaining owner check: update Crewroom in TestFlight, then use **Profile → Edit profile → Add/Change/Remove photo → Save**. Test camera/library selection, crop, cancel, undo, persistence after reopening, and initials after saved removal. This signed installation and physical camera/library/crop behavior have not yet been verified.
 
 ### What to Test
 

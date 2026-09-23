@@ -1,10 +1,10 @@
 # Crewroom 0.4.0 private iPhone beta
 
-**Next update: profile photos.** See [PROFILE-PHOTOS.md](PROFILE-PHOTOS.md) for implementation, validation and deployment/build status. The sound-fix build-6 evidence below remains the last verified TestFlight release.
+**Current release: profile photos, 0.4.0 (8), is Testing**, verified September 23 around 6:45 PM EDT in the existing **Crewroom Private Beta** group (5 testers, 4 builds). Build-8 What to Test is saved, and **Automatically notify testers** was selected. Previous builds 0.4.0 (6), 0.4.0 (5) and 0.3.0 (2) were preserved. Physical iPhone profile-photo checks and notification receipt remain unverified. See [PROFILE-PHOTOS.md](PROFILE-PHOTOS.md) for the canonical release record. The sound-fix build-6 status and evidence below are historical.
 
-Updated September 23, 2026. **Sound-fix 0.4.0 (6) is Testing**, verified in App Store Connect around 2:51 PM EDT in **Crewroom Private Beta** (5 testers, 3 builds). The Expo upload succeeded, Apple processing is Complete, build-6 What to Test is saved, and submission to the existing group completed with **Automatically notify testers** selected. No separate manual notification was required; receipt of notifications has not been verified. Existing builds 0.4.0 (5) and 0.3.0 (2), testers and the invitation-link setting were preserved. The owner reported the requested preview **0.4.0 (7)** sound checks passing; it shares native source `73d469cf6f52959e709be59367e982cb26ccbe36` with store build 6. Store-6 installation remains unverified. This completes the private TestFlight update, not a public App Store release.
+**Historical sound-fix snapshot, September 23, 2026.** **0.4.0 (6) was Testing**, verified in App Store Connect around 2:51 PM EDT in **Crewroom Private Beta** (5 testers, 3 builds). The Expo upload succeeded, Apple processing is Complete, build-6 What to Test is saved, and submission to the existing group completed with **Automatically notify testers** selected. No separate manual notification was required; receipt of notifications has not been verified. Existing builds 0.4.0 (5) and 0.3.0 (2), testers and the invitation-link setting were preserved. The owner reported the requested preview **0.4.0 (7)** sound checks passing; it shares native source `73d469cf6f52959e709be59367e982cb26ccbe36` with store build 6. Store-6 installation remains unverified. This completed the sound-fix private TestFlight update, not a public App Store release.
 
-## Release evidence
+## Historical sound-fix release evidence
 
 | Item | Observed status |
 | --- | --- |
@@ -107,7 +107,7 @@ Source anchors: `server/app.mjs` account/crew schema and rate limiter; `server/s
 - Sightengine receives chosen public text/photos for safety checks; private drafts and private crew plans are excluded. Videos/audio are currently reviewed by humans. R2 backups are restricted recovery copies. Provider retention and configured logging must remain consistent with the published privacy policy.
 - Phone Number, device ID, purchases, health/sensitive data and advertising data have no intentional collection path in the audited native source. The operator's private Apple review phone number is not a user data-collection feature.
 
-## Distribution completed; remaining device follow-up
+## Historical sound-fix distribution and device follow-up
 
 The owner authorized an automatic follow-up on September 23. Codex heartbeat `finish-crewroom-testflight-update` completed the existing submission/release and was stopped after build 6 reached **Testing**. No replacement submission or paid queue upgrade was created.
 
