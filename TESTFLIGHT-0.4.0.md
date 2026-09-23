@@ -1,6 +1,6 @@
 # Crewroom 0.4.0 private iPhone beta
 
-Updated September 23, 2026, 12:06 AM EDT. **0.4.0 (5) is Waiting for Review** in Apple TestFlight. Upload processing completed and the build was submitted for the existing Crewroom Private Beta group (4 testers). Automatically notify testers was left unchecked while the final public-video/camera-cancel device check is pending. This is not a public App Store launch; Apple approval and tester distribution remain outstanding.
+Updated September 23, 2026. **0.4.0 (5) is Testing**, verified in App Store Connect around 1:16 PM EDT, for Crewroom Private Beta (5 testers). It had been Approved with manual notification pending at 11:55 AM EDT; the later browser check found it already distributed without this release task notifying testers. Katherine’s corrected entry shows Invited September 23. The owner confirmed public-video playback and camera cancellation in the existing 0.4 iPhone app (current installed build not reconfirmed), but reported that every new feed video starts muted. Sound-fix store candidate **0.4.0 (6)** finished from source `73d469cf6f52959e709be59367e982cb26ccbe36`; physical swipe verification remains pending. This remains a private TestFlight release.
 
 ## Release evidence
 
@@ -9,21 +9,24 @@ Updated September 23, 2026, 12:06 AM EDT. **0.4.0 (5) is Waiting for Review** in
 | App identity | `com.joincrewroom.app`; Expo `geraldogs-team/crewroom`; App Store Connect app `6813563844`. |
 | Hosted service | `https://joincrewroom.com`; backend `7e3d78d` is Live with photo/text screening and human video review. [Render deployment](https://dashboard.render.com/web/srv-damc8mp42hec738hb7mg/deploys/dep-dapkqh49v7es738vdtcg) started September 22 at 11:53:40 PM EDT and completed in 1m05s. |
 | Signed preview | [0.4.0 (4)](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/3239cd1b-a202-4506-8453-23adb4b1099b), native client revision `5af210e`, succeeded and exercised by owner. |
-| Store candidate | [0.4.0 (5)](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/dc9b03e3-d48f-400b-8c10-516db9c43b91), source `e7538730a5fb0924a540b410bff30a5b422a716c`; **FINISHED**. |
+| Sound-fix candidate | [0.4.0 (6)](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/78bbc76a-16b3-4ef5-9319-a5937d0fa561), source `73d469cf6f52959e709be59367e982cb26ccbe36`; production build **FINISHED** September 23 at 1:19 PM EDT. EAS submission [ce7a8b9a-11c5-4bc4-97ec-edf2fc42ca28](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/ce7a8b9a-11c5-4bc4-97ec-edf2fc42ca28) queued without automatic TestFlight setup. |
+| Sound-fix device preview | [0.4.0 (7)](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/0d7ef017-834a-4c47-adc3-650ed4a7ed12), internal distribution from the same native source `73d469c`; **FINISHED** September 23 at 1:24 PM EDT. Install button verified in Expo. Physical swipe check requested and pending. |
+| Available store build | [0.4.0 (5)](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/dc9b03e3-d48f-400b-8c10-516db9c43b91), source `e7538730a5fb0924a540b410bff30a5b422a716c`; **FINISHED**. Testing; a sound-fix update is being prepared. |
 | Store package inspection | IPA identity/version and camera/microphone/library descriptions match the configuration. Embedded profile identifies `A48T68DM6A.com.joincrewroom.app`, has no device allowlist, sets `get-task-allow=false` and `beta-reports-active=true`. Embedded metadata was read; this was not independent certificate-chain validation. |
 | EAS submission | [42060c69-ac89-45ce-a06b-bb5702a1a036](https://expo.dev/accounts/geraldogs-team/projects/crewroom/submissions/42060c69-ac89-45ce-a06b-bb5702a1a036) **FINISHED** at `2026-09-23T03:56:20Z`; Apple showed Processing at 11:56 PM EDT. |
-| Apple beta review | Build `7e6b3fd3-3a3d-4c44-93ef-11431f991507`: upload Complete, **Waiting for Review**, associated with Crewroom Private Beta. Automatic notification disabled for this build. |
-| Existing TestFlight | 0.3.0 (2) remains Testing; build 5 has not been distributed. |
+| Apple beta review | Build `7e6b3fd3-3a3d-4c44-93ef-11431f991507`: upload Complete; Approved at 11:55 AM EDT, then observed **Testing** around 1:16 PM EDT in Crewroom Private Beta (5 testers). |
+| Existing TestFlight | 0.4.0 (5) and 0.3.0 (2) are Testing; Katherine’s corrected tester entry is Invited September 23. |
 | Automated video checks | Historical implementation validation: 95/95 tests, TypeScript, Expo Doctor 21/21, web/iOS/Android exports; see [VIDEO-BETA.md](VIDEO-BETA.md). |
 | Moderation acceptance | 60/60 targeted regression tests; 8/8 bounded live provider fixtures in 13 HTTP requests; operator browser access verified. See [HYBRID-MODERATION.md](HYBRID-MODERATION.md). |
-| Current native audit | 12/12 native-configuration and video-selection tests passed; no confirmed release-blocking code issue found. |
+| Earlier native audit | 12/12 native-configuration and video-selection tests passed before the owner reported the feed sound issue. |
+| Feed sound fix | Source keeps the mute preference in the open feed and passes it to each active native player. TypeScript, 12/12 existing configuration/selection tests and iOS/Android exports passed. Both signed candidates finished; component/device sound behavior remains unverified pending the owner’s preview-7 swipe check. |
 | Live-check regression tests | 5/5 tests passed for the bounded video acceptance and isolated backup helpers. |
 | Live private-video API acceptance | 6/6 cases passed in 27 requests plus 4 cleanup requests. Both fixture accounts were deleted; zero public posts were created. |
 | App Store Connect metadata/privacy | Beta Description, Review Notes and build-specific What to Test saved; the disabled Save button confirmed persistence. Privacy Policy URL saved as `https://joincrewroom.com/privacy`. Collection categories below remain a draft proposal, not saved/published answers. |
 | Isolated R2 video backup/restore | Synthetic MP4 and poster round trip passed: 23 cloud requests, 5 cleanup requests, 4 fixture objects and 2 media files. Fixture objects were cleaned up; production database/media were untouched. |
 | Fresh production backup/restore | `run-1790135803651-e0d9350b-b5f3-4519-afe8-2ec929ef5e45`, created `2026-09-23T03:57:01.854Z`, 26,229,702 encrypted bytes and 19 media files; isolated restore verified successfully. Read-only production counts identify 11 images, 4 videos and their 4 posters, establishing real video-inclusive recovery. |
 
-The final server/provider corrections after client revision `5af210e` changed server code, tests and documentation, not native behavior. A store-signed binary still needs its own launch/installation check after Apple makes it available.
+Builds 4 and 5 share native behavior; the intervening server/provider corrections changed server code, tests and documentation. The new feed sound fix changes native behavior and requires a replacement binary and device verification.
 
 The live API cases exercised synthetic upload/poster generation, private-content denial to signed-out and unrelated users, owner playback and authorized byte ranges/HEAD requests, post deletion revoking access, and account deletion revoking sessions/media access. These were bounded private fixtures, not device public-feed, report/block or human-review tests. The separate R2 exercise establishes a video/poster round trip without restoring over production; the fresh production snapshot and restore were verified independently.
 
@@ -38,7 +41,11 @@ On **preview 0.4.0 (4)**, the owner reported:
 - A private video draft survives restarting the app and plays/seeks afterward.
 - Audio stops when leaving playback.
 
-The iPhone model and iOS version were not provided. These are owner-reported checks, not instrumented device tests. Permission denial/cancel, both cameras, library/iCloud/SDR format variations, HDR rejection, upload interruption and retry, boundary files, slow playback, multiple-video feed behavior, two-account moderation/report/block/deletion, and the remaining checklist in [VIDEO-BETA.md](VIDEO-BETA.md) are not established by these results. Record each additional result separately.
+On September 23, the owner also confirmed that an approved public video plays in Videos and canceling the camera leaves Create usable. These later checks were on the existing 0.4 iPhone app; its installed build was not reconfirmed.
+
+The same September 23 report identified a feed bug: after unmuting a video, swiping to the next video resets it to muted. The source fix preserves mute/unmute across forward/back swipes and pagination while the feed stays open. Closing and reopening the feed starts muted again. This fix has not yet been verified on a signed replacement build.
+
+The iPhone model and iOS version were not provided. Permission denial, library-picker cancellation, both cameras, library/iCloud/SDR format variations, HDR rejection, upload interruption and retry, boundary files, slow playback, two-account moderation/report/block/deletion, and the broader checklist in [VIDEO-BETA.md](VIDEO-BETA.md) remain unverified. Record additional results separately.
 
 ## What to Test summary (saved in App Store Connect)
 
@@ -48,9 +55,13 @@ Public photos and text publish after automatic safety checks pass. Flagged submi
 
 Send beta feedback through TestFlight or `support@joincrewroom.com`. The operator's daily review does not imply round-the-clock support.
 
+## Build 6 What to Test (prepared; not yet saved in Apple)
+
+This update fixes video-feed sound resetting on every swipe. Open Videos, unmute a clip with sound, and swipe forward and back: sound should stay on. Mute once and swipe again: the next clip should stay muted. Your choice lasts while the feed is open; reopening it starts muted. Confirm audio stops when leaving or backgrounding the feed. Continue checking recording, private drafts, public video review, and the existing collaboration features. Send feedback through TestFlight or support@joincrewroom.com.
+
 ## Beta App Review content
 
-The Beta Description and Review Notes are saved in App Store Connect. The text below records the review context; the exact saved fields remain the source of truth. The proposed What to Test above is not yet recorded as saved.
+The Beta Description, Review Notes and build 5 What to Test are saved in App Store Connect. The text below records the review context; the exact saved fields remain the source of truth. The replacement build will need its own What to Test notes covering the sound fix.
 
 Crewroom is an 18+ cosplay creative network and private collaboration planner. Please use the dedicated ordinary review account supplied in App Store Connect's private sign-in fields. It has no moderator permissions. Credentials must remain in those fields, not this repository or public notes.
 
@@ -95,10 +106,10 @@ Source anchors: `server/app.mjs` account/crew schema and rate limiter; `server/s
 
 ## Remaining distribution steps
 
-1. Record the owner’s pending public-video approval/playback and camera-cancel results, plus device/OS if provided. Core recording, sound, private playback and cellular checks already passed.
-2. Wait for Apple’s beta approval. The current build is Waiting for Review, not yet available to external testers.
-3. Once both checks are satisfied, open build 5 in App Store Connect and choose **Notify Testers**. [Apple’s instructions](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers) require this manual distribution step when automatic notification is disabled. Verify the status changes to **Testing**.
-4. Verify the corrected Katherine tester entry (`rijokatherine511@gmail.com`) receives an invitation; it previously showed No Builds Available. Preserve the existing audience and invitation-link setting.
-5. Install 0.4.0 (5) through TestFlight and confirm launch/sign-in as a final store-signed installation check. The already-tested preview 0.4.0 (4) uses the same native source behavior.
+1. Store build 6 finished and is queued for Apple upload. Preview build 7 finished from the same native source and is installable on the registered iPhone. TypeScript, existing native tests and native exports passed. Build 5 remains available; hold replacement external notification until the swipe check passes.
+2. On the replacement candidate, unmute a video, swipe forward and back, then mute and swipe again. Confirm the preference carries across clips and playback stops when leaving/backgrounding the feed. Record device/OS if provided.
+3. Submit the tested replacement to the existing beta group and wait for any required Apple processing/review. Once approved, choose **Notify Testers** if automatic notification is disabled, following [Apple’s instructions](https://developer.apple.com/help/app-store-connect/test-a-beta-version/invite-external-testers). Verify the replacement reaches **Testing**.
+4. Katherine’s corrected entry (`rijokatherine511@gmail.com`) now shows Invited September 23; verify the replacement is available to her after release. Preserve the existing audience and invitation-link setting.
+5. Install the replacement through TestFlight and confirm launch/sign-in as a final store-signed installation check.
 
-Read-only live checks after operator approvals returned HTTP 200 with two public videos and HTTP 206 video/mp4 for an anonymous byte-range request. The moderation history records the operator’s approvals. This verifies service publication and streaming, not physical feed playback or camera cancellation. App Privacy collection categories remain a proposal for final store preparation; no collection answers were published. Keep unverified device checks distinct from completed API checks and never record review credentials.
+Read-only live checks after operator approvals returned HTTP 200 with two public videos and HTTP 206 video/mp4 for an anonymous byte-range request. The moderation history records the operator’s approvals. These API results are separate from the owner's later public-playback and camera-cancel confirmations above. App Privacy collection categories remain a proposal for final store preparation; no collection answers were published. Never record review credentials.
