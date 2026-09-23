@@ -1,6 +1,6 @@
 # Crewroom moderation setup and operating guide
 
-**Prepared September 22, 2026. This implementation has not been activated or deployed.** No Sightengine subscription or production workflow has been configured by this change, and no iPhone binary containing these moderation changes has been built. Keep `MODERATION_MODE=manual` until the owner selects an operator account, approves a provider plan and processing terms, and completes the live acceptance checks below.
+**Deployment in progress September 22, 2026.** The moderation desk/backend at `5af210e` is deployed on Render in manual mode. Automatic screening is not activated, and no iPhone binary containing these moderation changes has been built. The owner selected Sightengine Starter ($29/month) for photo/text checks with human video review, and selected their personal Jikjii account for operator access. Keep `MODERATION_MODE=manual` until credentials, operator access, current-model coverage and live acceptance checks are complete.
 
 ## What changes for creators
 
@@ -30,7 +30,7 @@ Current published Sightengine prices, checked September 22, 2026:
 
 Both listed tiers charge $0.002 per additional operation. Operations are **not posts**: multiple models, photos, video frames, audio checks and retries can consume multiple operations. These costs are additional to Render and other services. The adapter spaces requests, but does not enforce a monthly spending cap. Review usage and the provider’s billing controls before activation. [Official pricing](https://sightengine.com/pricing)
 
-Create an image workflow and, if enabling video automation, a separate video workflow in Sightengine. Cover explicit sexual content, graphic injury, hate symbols, violence, self-harm and harmful text embedded in media. The prepared adapter lists its expected models in `server/sightengine.mjs`. Every required model must run before an ACCEPT decision; do not add an early ACCEPT branch that skips later checks. Crewroom treats a workflow rejection as a human-review hold, not an automatic permanent deletion. [Image workflow instructions](https://sightengine.com/docs/image-moderation-workflows), [video workflow instructions](https://sightengine.com/docs/video-moderation-workflows)
+Create an image workflow and, if enabling video automation, a separate video workflow in Sightengine. Cover explicit sexual content, graphic injury, hate symbols, violence, self-harm and harmful text embedded in media. The prepared adapter lists its expected models in `server/sightengine.mjs`. The image workflow uses five visual models (`nudity-2.1`, `gore-2.0`, `offensive-2.0`, `violence`, `self-harm`); disable legacy workflow Text Analysis. Crewroom separately calls `text-content-2.0` with explicit harmful-text categories and English/Spanish settings for every accepted image and poster. Missing visual model scores or incomplete OCR results stay held. Every required model must run before an ACCEPT decision; do not add an early ACCEPT branch that skips later checks. Crewroom treats a workflow rejection as a human-review hold, not an automatic permanent deletion. [Image workflow instructions](https://sightengine.com/docs/image-moderation-workflows), [video workflow instructions](https://sightengine.com/docs/video-moderation-workflows)
 
 Calibrate with permitted, consented examples of cosplay across body types and skin tones, prop weapons, armor, revealing costumes and stage blood. A prop or costume alone is not a rule violation. Route ambiguous context to human review; do not configure a blanket cosplay-weapon ban. Include known harmless fixtures and authorized provider safety fixtures, and record expected versus actual outcomes.
 
@@ -83,4 +83,23 @@ This beta runs one durable SQLite-backed screening worker, with one submission i
 
 If the provider or workflows misbehave, set `MODERATION_MODE=manual` and restart the service. New public submissions remain held, and the desk remains usable. Previously approved posts stay public unless separately removed; rollback is not a blanket takedown. Investigate the failure, test corrected workflows, and deliberately retry held submissions before re-enabling automation.
 
-**Owner decisions still required:** which personal Crewroom account receives operator access, and whether to start with Starter for photo/text automation plus human video review, or Pro for the prepared video/audio path. No plan purchase or production activation is implied by this document.
+**Owner decisions recorded:** Starter photo/text screening at $29/month, videos and audio held for human review, and the personal Jikjii account selected for operator access (resolved from the owner-provided email to an immutable production account ID). Subscription activation, access grant and final provider verification are tracked separately; selecting the plan does not establish that automatic screening is active.
+
+## Production rollout evidence
+
+- Render deployment `dep-dapjktrtqb8s73dcccmg` serves commit `5af210e` in manual mode; `/moderation` loads and denies its private workspace to signed-out visitors.
+- Before deployment, offsite backup `run-1790130389805-5fd7402a-868e-4e73-a83c-988e8ee2ea6f` verified successfully: 12 media files, 6,696,132 encrypted bytes.
+- Created the inactive-in-Crewroom Sightengine image workflow `wfl_lsEyOtDqOdR3u4rZB7xCv` (Crewroom public images v1). Its visual rules cover nudity, graphic injury, violence, self-harm and hate imagery. Flags mean Crewroom human review, never automatic permanent deletion. Costume skin exposure, swimwear, minor cuts/stage blood and prop objects are not blanket bans. Contextually serious matches remain held.
+- Sightengine workflow browser test accepted the existing AI-generated `assets/demo/forest-maker.png`. This is one harmless fixture, not proof of safety-classifier accuracy or complete integration coverage.
+- The workflow builder and browser playground expose legacy text rules. The adapter now calls the current `text-content-2.0` model separately with explicit categories/languages and validates all five visual model outputs. A live clean OCR response remains to be verified; unknown/absent language currently stays held rather than guessing.
+- The subsequent combined regression run passed 55/55 tests for the adapter, live-fixture harness, hybrid worker and moderation desk. Production health returned 200; the public moderation capability response remained manual/false/false; signed-out queue access returned 401.
+
+### Bounded live provider acceptance command
+
+Once credentials and the image workflow are set on Render, keep `MODERATION_MODE=manual` and run:
+
+```sh
+node scripts/check-moderation-live.mjs --public-demo-fixtures
+```
+
+This opt-in check sends only the three hash-pinned fictional demo assets already shipped with Crewroom and synthetic text/OCR fixtures. It never reads user uploads or the production database and changes no production flags. It caps itself at ten HTTP requests, requires exact pass/hold outcomes, checks that Starter videos make no provider calls, and prints only fixed sanitized result codes. A provider error cannot masquerade as successful harmful-content detection. Model operations can exceed HTTP request count. All seven cases must pass before considering activation, followed by the broader acceptance checks above. This small fixture set does not establish classifier accuracy across cosplay, languages or all safety categories.

@@ -5,10 +5,19 @@ import path from 'node:path';
 const ENDPOINTS = Object.freeze({
   text: 'https://api.sightengine.com/1.0/text/check.json',
   image: 'https://api.sightengine.com/1.0/check-workflow.json',
+  imageText: 'https://api.sightengine.com/1.0/check.json',
   video: 'https://api.sightengine.com/1.0/video/check-workflow-sync.json',
   audio: 'https://api.sightengine.com/1.0/video/check-sync.json',
 });
 const TEXT_CLASSES = ['sexual', 'discriminatory', 'insulting', 'violent', 'toxic', 'self-harm'];
+const OCR_CATEGORIES = Object.freeze(['sexual', 'insult', 'inappropriate', 'discriminatory', 'violence', 'self_harm', 'grooming', 'extremism']);
+const IMAGE_CORE_SCORES = Object.freeze({
+  nudity: Object.freeze(['sexual_activity', 'sexual_display', 'erotica']),
+  gore: Object.freeze(['prob']),
+  offensive: Object.freeze(['nazi', 'supremacist', 'terrorist', 'confederate', 'asian_swastika', 'middle_finger']),
+  violence: Object.freeze(['prob']),
+  'self-harm': Object.freeze(['prob']),
+});
 const SUPPORTED_TEXT_LANGUAGES = ['en', 'fr', 'it', 'pt', 'es', 'ru', 'tr'];
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MAX_VIDEO_BYTES = 50 * 1024 * 1024;
@@ -22,15 +31,19 @@ const MAX_TEXT_CHARACTERS = 12_000;
 // https://sightengine.com/docs/video-moderation-workflows
 // https://sightengine.com/docs/text-moderation-ml-models
 // https://sightengine.com/docs/audio-profanity-model
+// https://sightengine.com/docs/ocr-text-moderation-in-images-2.0
 export const SIGHTENGINE_SETUP = Object.freeze({
-  visualModels: Object.freeze(['nudity-2.1', 'gore-2.0', 'offensive-2.0', 'violence', 'self-harm', 'text-content-2.0']),
-  visualPolicy: 'Review explicit nudity/sexual activity, graphic injury, hate symbols, violence/threats, self-harm and harmful embedded text. Calibrate costumes, skin exposure, stage blood and props with beta examples before enabling. Every required model must run; no early ACCEPT branches.',
+  visualModels: Object.freeze(['nudity-2.1', 'gore-2.0', 'offensive-2.0', 'violence', 'self-harm']),
+  visualPolicy: 'Review explicit nudity/sexual activity, graphic injury, hate symbols, violence/threats and self-harm. Calibrate costumes, skin exposure, stage blood and props with beta examples before enabling. Every required model must run; no early ACCEPT branches. Disable legacy workflow Text Analysis: the adapter separately requires OCR 2.0.',
+  imageTextModel: 'text-content-2.0',
+  imageTextCategories: OCR_CATEGORIES,
+  imageTextPolicy: 'Separately screen embedded text in each image and poster, and sampled video frames when video screening is enabled. Any selected category match requires human review, including low severity. Only complete empty results in a configured language can pass.',
   textModels: 'general,self-harm',
   textReviewThreshold: 0.5,
   audioModel: 'audio-profanity',
   audioLanguage: 'en',
   audioLimit: 'English profanity, slurs, insults and obscenity only. The response does not establish spoken language. This is not comprehensive or multilingual speech classification; configure only after accepting this limitation and keeping report/human-review fallbacks.',
-  videoLimit: 'Synchronous API: positive duration strictly below 60 seconds; sampled visuals, the documented English audio model and poster must all pass. Longer/unknown duration requires human review.',
+  videoLimit: 'Synchronous API: positive duration strictly below 60 seconds; sampled visuals and embedded text, the documented English audio model, and both poster checks must all pass. Longer/unknown duration requires human review.',
   pricingURL: 'https://sightengine.com/pricing',
 });
 
@@ -43,6 +56,7 @@ class ScreeningFailure extends Error {
 function fail(code) { throw new ScreeningFailure(code); }
 function probability(value) { return typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1; }
 function identifier(value) { return typeof value === 'string' && /^[A-Za-z0-9_-]{1,160}$/.test(value); }
+function object(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 
 async function localMedia(file, kind, signal) {
   if (typeof file !== 'string' || !path.isAbsolute(file) || file.includes('\0')) fail('invalid_media');
@@ -114,7 +128,21 @@ function requireWorkflowAccept(body, workflow, kind) {
   if (body.summary.reject_reason !== undefined && (!Array.isArray(body.summary.reject_reason) || body.summary.reject_reason.length)) fail('inconsistent_response');
   if (body.summary.reject_prob !== undefined && !probability(body.summary.reject_prob)) fail('invalid_response');
   if (body.summary.reject_prob >= 0.5) fail(`${kind}_flagged`);
+  // A saved workflow can be edited after operator verification. Its ACCEPT
+  // summary alone does not prove every required model still ran. Validate the
+  // documented core outputs for photos/posters; policy thresholds remain in
+  // the verified workflow so costume and prop exceptions are not lost here.
+  if (kind === 'image' && Object.entries(IMAGE_CORE_SCORES).some(([model, fields]) => !object(body[model]) || fields.some(field => !probability(body[model][field])))) fail('image_coverage_missing');
   if (kind === 'video' && (!Array.isArray(body.data?.frames) || body.data.frames.length === 0)) fail('video_coverage_missing');
+}
+
+function requireImageTextAccept(text, languages) {
+  // OCR 2.0 reports triggered categories and their match details, not a safe
+  // boolean or a probability. Legacy text.profanity results are not coverage.
+  // Deliberately do not retain, log or return provider-extracted private text.
+  if (!object(text) || !Array.isArray(text.detected_categories) || !text.detected_categories.every(value => typeof value === 'string' && value.length > 0) || !object(text.detections)) fail('image_text_coverage_missing');
+  if (text.detected_categories.length || Object.keys(text.detections).length) fail('image_text_flagged');
+  if (typeof text.language !== 'string' || !languages.includes(text.language)) fail('image_text_language_unverified');
 }
 
 /**
@@ -151,6 +179,7 @@ export function createSightengineModerator({
   // Starter permits one request per second. The worker owns cross-process and
   // aggregate billing limits; this spaces sequential requests within an instance.
   const requestInterval = Number.isFinite(minRequestIntervalMs) ? Math.min(10_000, Math.max(0, minRequestIntervalMs)) : 1100;
+  const imageTextFields = Object.freeze({ models: SIGHTENGINE_SETUP.imageTextModel, text_categories: OCR_CATEGORIES.join(','), opt_lang: languages.join(',') });
   let lastRequestAt = 0;
   let busy = false;
 
@@ -224,15 +253,23 @@ export function createSightengineModerator({
         if (item.kind === 'image') {
           const body = await request(ENDPOINTS.image, { workflow: imageWorkflow }, { blob, kind: 'image' }, signal);
           requireWorkflowAccept(body, imageWorkflow, 'image');
+          const imageText = await request(ENDPOINTS.imageText, imageTextFields, { blob, kind: 'image' }, signal);
+          requireImageTextAccept(imageText.text, languages);
         } else {
           const body = await request(ENDPOINTS.video, { workflow: videoWorkflow }, { blob, kind: 'video' }, signal);
           requireWorkflowAccept(body, videoWorkflow, 'video');
-          const audio = await request(ENDPOINTS.audio, { models: SIGHTENGINE_SETUP.audioModel }, { blob, kind: 'video' }, signal);
+          // The documented sync video API can combine audio and visual models.
+          // Requiring OCR here avoids relying on legacy workflow text rules.
+          const audio = await request(ENDPOINTS.audio, { ...imageTextFields, models: `${SIGHTENGINE_SETUP.audioModel},${SIGHTENGINE_SETUP.imageTextModel}` }, { blob, kind: 'video' }, signal);
           if (!Array.isArray(audio.data?.audio?.profanity)) fail('audio_coverage_missing');
           if (audio.data.audio.profanity.length) fail('audio_flagged');
+          if (!Array.isArray(audio.data?.frames) || !audio.data.frames.length) fail('image_text_coverage_missing');
+          for (const frame of audio.data.frames) requireImageTextAccept(frame?.text, languages);
           const poster = await localMedia(item.posterFile, 'image', signal);
           const checkedPoster = await request(ENDPOINTS.image, { workflow: imageWorkflow }, { blob: poster, kind: 'image' }, signal);
           requireWorkflowAccept(checkedPoster, imageWorkflow, 'image');
+          const posterText = await request(ENDPOINTS.imageText, imageTextFields, { blob: poster, kind: 'image' }, signal);
+          requireImageTextAccept(posterText.text, languages);
         }
       }
       signal.throwIfAborted();
