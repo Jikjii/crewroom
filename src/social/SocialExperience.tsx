@@ -44,6 +44,7 @@ interface Props {
   initialRoute?: Route | null;
   onClearRoute?: () => void;
   onAccountSettings?: () => void;
+  onProfileChanged?: () => void;
 }
 
 export default function SocialExperience({
@@ -55,6 +56,7 @@ export default function SocialExperience({
   initialRoute,
   onClearRoute,
   onAccountSettings,
+  onProfileChanged,
 }: Props) {
   const { C, s } = useUI();
   const x = useSocialStyles();
@@ -416,6 +418,7 @@ export default function SocialExperience({
           user={user}
           onClose={() => setSheet(null)}
           onSaved={(profile) => {
+            onProfileChanged?.();
             setRoutes((v) =>
               v.map((r) =>
                 r.type === "profile" && r.value === sheet.profile.handle

@@ -262,6 +262,7 @@ export default function FocusFeed({
                   >
                     <Avatar
                       name={post.author.displayName}
+                      source={post.author.avatar ? mediaSource(post.author.avatar) : undefined}
                       size={40}
                       color={C.lavender}
                     />

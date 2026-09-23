@@ -341,6 +341,7 @@ export function ProfileLink({
     >
       <Avatar
         name={profile.displayName}
+        source={profile.avatar ? mediaSource(profile.avatar) : undefined}
         size={33}
         color={profile.isExample ? C.lavender : C.peach}
       />
@@ -508,6 +509,7 @@ export function WorkCard({
           >
             <Avatar
               name={post.author.displayName}
+              source={post.author.avatar ? mediaSource(post.author.avatar) : undefined}
               size={23}
               color={C.lavender}
             />

@@ -8,7 +8,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { socialApi } from "../api";
+import { mediaSource, socialApi } from "../api";
 import type { User } from "../types";
 import { Avatar, Button, Empty, Icon, Tag, useUI } from "../ui";
 import type {
@@ -466,7 +466,11 @@ export default function Discover({
                     style={[x.card, { width: wide ? "48.7%" : "100%" }]}
                   >
                     <View style={x.row}>
-                      <Avatar name={profile.displayName} size={48} />
+                      <Avatar
+                        name={profile.displayName}
+                        source={profile.avatar ? mediaSource(profile.avatar) : undefined}
+                        size={48}
+                      />
                       <View style={x.grow}>
                         <Text style={x.sectionTitle}>
                           {profile.displayName}

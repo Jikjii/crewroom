@@ -130,11 +130,13 @@ export function createModerationAdmin({ db, mediaDir, operatorIds = [], send, bo
     return aged({ ...row, priority: severeReasons.has(row.reason) ? 'urgent' : 'normal' });
   }
   function mediaTarget(type, targetId, mediaId) {
-    if (type !== 'post') fail(404, 'Media not found.');
     // Check scope without hashing a whole video again for each small seek request.
-    const record = get(`SELECT m.*,p.visibility,p.deletedAt,p.isExample,u.isDemo
+    const record = type === 'profile' ? get(`SELECT m.*,p.visibility,p.isExample,u.isDemo
+      FROM social_media m JOIN social_profiles p ON p.avatarMediaId=m.id AND p.userId=m.ownerId
+      JOIN users u ON u.id=p.userId WHERE p.userId=? AND m.id=? AND m.kind='image'`, targetId, mediaId)
+      : type === 'post' ? get(`SELECT m.*,p.visibility,p.deletedAt,p.isExample,u.isDemo
       FROM social_media m JOIN social_post_media pm ON pm.mediaId=m.id JOIN social_posts p ON p.id=pm.postId
-      JOIN users u ON u.id=p.authorId WHERE p.id=? AND m.id=?`, targetId, mediaId);
+      JOIN users u ON u.id=p.authorId WHERE p.id=? AND m.id=?`, targetId, mediaId) : null;
     if (!record || record.visibility !== 'public' || record.deletedAt || record.isExample || record.isDemo || record.exampleFilename)
       fail(404, 'Media not found.');
     return record;
@@ -223,7 +225,7 @@ export function createModerationAdmin({ db, mediaDir, operatorIds = [], send, bo
         return respond(200, { ok: true });
       }
     }
-    const mediaMatch = /^\/api\/moderation\/media\/(post)\/([^/]+)\/([^/]+)(\/poster)?$/.exec(url.pathname);
+    const mediaMatch = /^\/api\/moderation\/media\/(profile|post)\/([^/]+)\/([^/]+)(\/poster)?$/.exec(url.pathname);
     if (mediaMatch && ['GET', 'HEAD'].includes(req.method)) {
       const [, type, targetId, mediaId, poster] = mediaMatch, media = mediaTarget(type, targetId, mediaId);
       if (poster && media.kind !== 'video') fail(404, 'Poster not found.');

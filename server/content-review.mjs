@@ -76,9 +76,12 @@ export function inspectContent(db, type, id, mediaDir) {
   const row = targetRow(db, type, id);
   if (!reviewable(db, type, row)) throw new Error("Only real, non-deleted public submissions can be reviewed.");
   const { reviewStatus, reviewReason, reviewedAt, reviewStage, ...content } = row;
-  const media = type === "post" ? db.prepare(`SELECT m.id,m.filename,m.width,m.height,m.kind,m.duration,m.posterFilename,pm.position,pm.alt
+  const attachments = type === "post" ? db.prepare(`SELECT m.id,m.filename,m.width,m.height,m.kind,m.duration,m.posterFilename,pm.position,pm.alt
     FROM social_post_media pm JOIN social_media m ON m.id=pm.mediaId WHERE pm.postId=? ORDER BY pm.position`).all(id)
-    .map((item) => {
+    : type === "profile" && row.avatarMediaId ? db.prepare(`SELECT id,filename,width,height,kind,duration,posterFilename,0 AS position,'Profile photo' AS alt
+      FROM social_media WHERE id=? AND ownerId=? AND kind='image' AND exampleFilename IS NULL`).all(row.avatarMediaId, row.userId) : [];
+  if (type === "profile" && row.avatarMediaId && attachments.length !== 1) throw new Error("Profile photo could not be inspected.");
+  const media = attachments.map((item) => {
       if (!item.filename || path.basename(item.filename) !== item.filename) throw new Error("Invalid review media path.");
       const file = path.resolve(mediaDir, item.filename);
       let poster = {};
@@ -88,8 +91,12 @@ export function inspectContent(db, type, id, mediaDir) {
         poster = { posterFile, posterSha256: createHash("sha256").update(readFileSync(posterFile)).digest("hex") };
       }
       return { ...item, file, sha256: createHash("sha256").update(readFileSync(file)).digest("hex"), ...poster };
-    }) : [];
-  const version = createHash("sha256").update(JSON.stringify({ type, content,
+    });
+  // Adding the nullable photo column must not invalidate a pre-upgrade profile
+  // screening job. Actual photo IDs and bytes still bind every changed photo.
+  const versionContent = { ...content };
+  if (type === "profile" && versionContent.avatarMediaId == null) delete versionContent.avatarMediaId;
+  const version = createHash("sha256").update(JSON.stringify({ type, content: versionContent,
     media: media.map(({ file, posterFile, ...item }) => item) })).digest("hex");
   return { type, id, version, reviewStatus, reviewReason, content, media,
     instructions: media.some(item => item.kind === "video")

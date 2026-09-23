@@ -36,8 +36,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Choose photos and videos to add to your Crewroom projects.",
-          "cameraPermission": "Record short cosplay videos to share on Crewroom.",
+          "photosPermission": "Choose a profile photo or photos and videos for your Crewroom projects.",
+          "cameraPermission": "Take a profile photo or record a short cosplay video on Crewroom.",
           "microphonePermission": "Record sound with your Crewroom videos."
         }
       ],

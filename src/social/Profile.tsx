@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   Image,
   Linking,
@@ -13,6 +13,8 @@ import {
   View,
 } from "react-native";
 import * as Clipboard from "expo-clipboard";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { getPublicWebUrl, mediaSource, socialApi } from "../api";
 import { isScreening, useScreeningRefresh } from './shared';
 import type { User } from "../types";
@@ -21,6 +23,7 @@ import { Avatar, Button, Empty, Field, Icon, Tag, useUI } from "../ui";
 import type {
   CreativePost,
   CreatorProfile,
+  MediaAsset,
   ProfileResult,
   SocialVisibility,
 } from "./types";
@@ -230,6 +233,7 @@ export default function Profile({
                     <View style={v.avatarRing}>
                       <Avatar
                         name={profile.displayName}
+                        source={profile.avatar ? mediaSource(profile.avatar) : undefined}
                         size={82}
                         color={C.lavender}
                       />
@@ -669,6 +673,10 @@ const commaList = (value: string) => [
       .filter(Boolean),
   ),
 ];
+type PhotoChange =
+  | { kind: "remove" }
+  | { kind: "replace"; uri: string; base64: string; uploaded?: MediaAsset };
+
 export function EditProfile({
   profile,
   user,
@@ -697,14 +705,96 @@ export function EditProfile({
     [open, setOpen] = useState(profile.openToCollab),
     [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [photoChange, setPhotoChange] = useState<PhotoChange | null>(null);
+  const [preparingPhoto, setPreparingPhoto] = useState(false);
+  const [permissionHelp, setPermissionHelp] = useState(false);
+  const photoRef = useRef<PhotoChange | null>(null);
+  const mounted = useRef(true);
   const lock = useRef(false);
+  const discardUpload = (change: PhotoChange | null) => {
+    if (change?.kind === "replace" && change.uploaded) {
+      // The server refuses deletion if a timed-out save already attached it.
+      void socialApi.deleteUnusedMedia(change.uploaded.id).catch(() => {});
+    }
+  };
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      discardUpload(photoRef.current);
+    };
+  }, []);
+  const changePhoto = (next: PhotoChange | null) => {
+    discardUpload(photoRef.current);
+    photoRef.current = next;
+    setPhotoChange(next);
+  };
+  const pickPhoto = async (camera: boolean) => {
+    if (lock.current) return;
+    lock.current = true;
+    setPreparingPhoto(true);
+    setError("");
+    setPermissionHelp(false);
+    try {
+      if (camera) {
+        const permission = await ImagePicker.requestCameraPermissionsAsync();
+        if (!permission.granted) {
+          if (mounted.current) setPermissionHelp(true);
+          throw new Error("Allow camera access in Settings to take a profile photo, or choose one from your library.");
+        }
+      }
+      if (!mounted.current) return;
+      const options: ImagePicker.ImagePickerOptions = {
+        mediaTypes: ["images"],
+        allowsMultipleSelection: false,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 1,
+      };
+      const result = camera
+        ? await ImagePicker.launchCameraAsync(options)
+        : await ImagePicker.launchImageLibraryAsync(options);
+      if (result.canceled || !mounted.current) return;
+      const asset = result.assets[0];
+      if (!asset || asset.type === "video" || !asset.width || !asset.height)
+        throw new Error("That photo could not be opened. Please choose another image.");
+      // Native pickers let you crop; web uses the centered square shown below.
+      const side = Math.min(asset.width, asset.height);
+      const processed = await ImageManipulator.manipulateAsync(asset.uri, [
+        { crop: { originX: Math.floor((asset.width - side) / 2), originY: Math.floor((asset.height - side) / 2), width: side, height: side } },
+        { resize: { width: Math.min(side, 768), height: Math.min(side, 768) } },
+      ], { format: ImageManipulator.SaveFormat.JPEG, compress: 0.85, base64: true });
+      if (!processed.base64) throw new Error("That photo could not be prepared. Please choose another image.");
+      if (mounted.current) changePhoto({ kind: "replace", uri: processed.uri, base64: processed.base64 });
+    } catch (e) {
+      if (mounted.current) setError(messageOf(e));
+    } finally {
+      lock.current = false;
+      if (mounted.current) setPreparingPhoto(false);
+    }
+  };
+  const photoSource = photoChange?.kind === "replace"
+    ? { uri: photoChange.uri }
+    : photoChange?.kind === "remove" || !profile.avatar
+      ? undefined
+      : mediaSource(profile.avatar);
+  const hasPhoto = !!photoSource;
   const save = async () => {
     if (lock.current) return;
     lock.current = true;
     setBusy(true);
     setError("");
     try {
+      const change = photoRef.current;
+      if (change?.kind === "replace" && !change.uploaded) {
+        change.uploaded = await socialApi.uploadMedia(change.base64, "image/jpeg");
+        if (!mounted.current) {
+          discardUpload(change);
+          return;
+        }
+      }
       const updated = await socialApi.updateMe({
+        ...(change ? { avatarMediaId: change.kind === "remove" ? null : change.uploaded!.id } : {}),
         displayName: name,
         handle: handle.toLowerCase().trim(),
         bio,
@@ -716,16 +806,48 @@ export function EditProfile({
         visibility,
         openToCollab: open,
       });
-      onSaved(updated);
+      photoRef.current = null;
+      if (mounted.current) onSaved(updated);
     } catch (e) {
-      setError(messageOf(e));
+      if (mounted.current) setError(messageOf(e));
     } finally {
       lock.current = false;
-      setBusy(false);
+      if (mounted.current) setBusy(false);
     }
   };
   return (
-    <Sheet title="The person behind the work" onClose={onClose} busy={busy}>
+    <Sheet title="The person behind the work" onClose={onClose} busy={busy || preparingPhoto}>
+      <View style={[x.card, { alignItems: "center", gap: 14 }]}>
+        <Avatar name={name || profile.displayName} size={100} source={photoSource} />
+        <Text style={x.label}>Profile photo</Text>
+        <View style={[x.wrap, { justifyContent: "center" }]}>
+          <Button
+            title={preparingPhoto ? "Preparing photo…" : hasPhoto ? "Change photo" : "Add photo"}
+            icon="image-outline"
+            small
+            disabled={busy || preparingPhoto}
+            onPress={() => void pickPhoto(false)}
+          />
+          {Platform.OS !== "web" && (
+            <Button title="Take photo" icon="camera-outline" small secondary disabled={busy || preparingPhoto} onPress={() => void pickPhoto(true)} />
+          )}
+          {hasPhoto && (
+            <Button title="Remove photo" icon="trash-outline" small secondary disabled={busy || preparingPhoto} onPress={() => changePhoto({ kind: "remove" })} />
+          )}
+        </View>
+        <Text style={[x.small, { textAlign: "center" }]}>
+          {photoChange?.kind === "remove"
+            ? "Your initials will replace your photo when you save."
+            : photoChange?.kind === "replace"
+              ? "This is your new photo preview. Save your profile to apply it."
+              : "Choose a photo that helps your crew recognize you."}
+          {Platform.OS === "web" ? " Photos are cropped to a centered square." : " You can crop your photo before saving."}
+        </Text>
+        {photoChange && <Button title="Undo photo change" small secondary disabled={busy || preparingPhoto} onPress={() => changePhoto(null)} />}
+        {permissionHelp && Platform.OS !== "web" && (
+          <Button title="Open Settings" secondary small onPress={() => { void Linking.openSettings().catch(e => setError(messageOf(e))); }} />
+        )}
+      </View>
       {profile.visibility === "private" && !user.isDemo && (
         <View style={x.soft}>
           <Text style={x.label}>Choose how you want to connect</Text>
@@ -827,7 +949,7 @@ export function EditProfile({
         <Text style={x.small}>
           {user.isDemo
             ? "Your profile stays inside your private demo."
-            : `Your display name, bio, roles, interests, broad city, and links become visible once approved. ${moderation.sharingSummary} Public edits are checked again. A profile held for review also hides your public work and comments. Making your profile private hides previously published work too.`}
+            : `Your photo, display name, bio, roles, interests, broad city, and links become visible once approved. ${moderation.sharingSummary} Public edits are checked again. A profile held for review also hides your public work and comments. Making your profile private hides previously published work too.`}
         </Text>
         <View style={x.divider} />
         <View style={x.toolbar}>
@@ -855,7 +977,7 @@ export function EditProfile({
               ? "Save public profile"
               : "Save profile"
         }
-        disabled={busy}
+        disabled={busy || preparingPhoto}
         onPress={() => void save()}
       />
     </Sheet>

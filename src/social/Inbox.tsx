@@ -6,7 +6,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { socialApi } from "../api";
+import { mediaSource, socialApi } from "../api";
 import type { User } from "../types";
 import { Avatar, Button, Empty, Icon, Tag, useUI } from "../ui";
 import type {
@@ -313,7 +313,11 @@ export default function Inbox({
                         }}
                       >
                         {item.actor ? (
-                          <Avatar name={item.actor.displayName} size={42} />
+                          <Avatar
+                            name={item.actor.displayName}
+                            source={item.actor.avatar ? mediaSource(item.actor.avatar) : undefined}
+                            size={42}
+                          />
                         ) : (
                           <View
                             style={{

@@ -20,7 +20,8 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from "react-native-safe-area-context";
-import { api, getApiBaseUrl, type PublicConfig } from "./src/api";
+import { api, getApiBaseUrl, mediaSource, socialApi, type PublicConfig } from "./src/api";
+import type { CreatorProfile } from "./src/social/types";
 import { AccountCenter, PasswordRecovery } from "./src/account/AccountCenter";
 import { PolicyLinks, PublicPageContent, parsePublicPage, type PublicPage } from "./src/account/PublicPages";
 import SocialExperience from "./src/social/SocialExperience";
@@ -163,6 +164,19 @@ function Crewroom() {
     [data, setData] = useState<Workspace>(blank),
     [loading, setLoading] = useState(true),
     [fatal, setFatal] = useState("");
+  const [ownProfile, setOwnProfile] = useState<CreatorProfile | null>(null);
+  const [ownProfileRevision, setOwnProfileRevision] = useState(0);
+  const ownAvatar = ownProfile?.userId === session?.user?.id ? ownProfile?.avatar : null;
+  useEffect(() => {
+    let active = true;
+    setOwnProfile(null);
+    if (session?.user) {
+      void socialApi.getMe().then(profile => {
+        if (active) setOwnProfile(profile);
+      }).catch(() => {});
+    }
+    return () => { active = false; };
+  }, [session?.user?.id, session?.user?.isDemo, ownProfileRevision]);
   const [tab, setTab] = useState<Tab>("Today"),
     [crewId, setCrewId] = useState(""),
     [projectId, setProjectId] = useState(""),
@@ -815,6 +829,7 @@ function Crewroom() {
             >
               <Avatar
                 name={session?.user?.name || "You"}
+                source={ownAvatar ? mediaSource(ownAvatar) : undefined}
                 size={34}
                 color={C.lavender}
               />
@@ -860,6 +875,7 @@ function Crewroom() {
               initialRoute={socialRoute}
               onClearRoute={clearSocialRoute}
               onAccountSettings={() => showPublicPage("delete-account")}
+              onProfileChanged={() => setOwnProfileRevision(value => value + 1)}
             />
           </>
         ) : (
@@ -1640,6 +1656,7 @@ function Crewroom() {
                     <View style={s.row}>
                       <Avatar
                         name={session?.user?.name || "You"}
+                        source={ownAvatar ? mediaSource(ownAvatar) : undefined}
                         size={62}
                         color={C.peach}
                       />

@@ -68,6 +68,9 @@ export function createSocial({
       postId TEXT NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE, mediaId TEXT NOT NULL REFERENCES social_media(id),
       position INTEGER NOT NULL, alt TEXT NOT NULL DEFAULT '', PRIMARY KEY(postId,mediaId)
     );
+    CREATE TABLE IF NOT EXISTS social_file_deletions (
+      filename TEXT PRIMARY KEY, createdAt TEXT NOT NULL
+    );
     CREATE TABLE IF NOT EXISTS social_comments (
       id TEXT PRIMARY KEY, postId TEXT NOT NULL REFERENCES social_posts(id) ON DELETE CASCADE,
       authorId TEXT NOT NULL REFERENCES social_profiles(userId), body TEXT NOT NULL, createdAt TEXT NOT NULL, deletedAt TEXT
@@ -112,6 +115,9 @@ export function createSocial({
   if (!mediaColumns.has("kind")) db.exec("ALTER TABLE social_media ADD COLUMN kind TEXT NOT NULL DEFAULT 'image'");
   if (!mediaColumns.has("duration")) db.exec("ALTER TABLE social_media ADD COLUMN duration REAL");
   if (!mediaColumns.has("posterFilename")) db.exec("ALTER TABLE social_media ADD COLUMN posterFilename TEXT");
+  if (!db.prepare("PRAGMA table_info(social_profiles)").all().some(row => row.name === "avatarMediaId"))
+    db.exec("ALTER TABLE social_profiles ADD COLUMN avatarMediaId TEXT REFERENCES social_media(id) ON DELETE SET NULL");
+  db.exec("CREATE INDEX IF NOT EXISTS social_profiles_avatar ON social_profiles(avatarMediaId)");
   const videoProcessor = createVideoProcessor({ mediaDir, dbPath });
   migrateContentReview(db);
   const moderation = createModeration({ db, mediaDir, mode: moderationMode, provider: moderationProvider, now, pollMs: moderationPollMs });
@@ -239,6 +245,11 @@ export function createSocial({
       fail(404, "This creator is not available.");
   }
   function profileJSON(profile, viewer) {
+    // Some relationship views retain a creator's identity after blocking. Never
+    // include their photo there unless the viewer can still see the profile.
+    const avatar = profile.avatarMediaId && profileVisible(profile, viewer)
+      ? get("SELECT * FROM social_media WHERE id=? AND ownerId=? AND kind='image' AND exampleFilename IS NULL", profile.avatarMediaId, profile.userId)
+      : null;
     const followers = profile.isExample
       ? []
       : all(
@@ -264,6 +275,7 @@ export function createSocial({
       userId: profile.userId,
       handle: profile.handle,
       displayName: profile.displayName,
+      avatar: avatar ? mediaJSON(avatar, `${profile.displayName}'s profile photo`) : null,
       bio: profile.bio,
       roles: JSON.parse(profile.roles),
       fandoms: JSON.parse(profile.fandoms),
@@ -474,6 +486,30 @@ export function createSocial({
       fail(400, `${field} must be an HTTPS URL or empty.`);
     }
   }
+  function mediaReferenced(mediaId) {
+    return Boolean(get("SELECT 1 FROM social_post_media WHERE mediaId=?", mediaId)
+      || get("SELECT 1 FROM social_profiles WHERE avatarMediaId=?", mediaId));
+  }
+  // Call under the mutation transaction. Keeping a durable deletion list makes
+  // removal survive a restart or an interrupted filesystem operation.
+  function reclaimMedia(mediaId, ownerId) {
+    const media = get("SELECT * FROM social_media WHERE id=? AND ownerId=? AND exampleFilename IS NULL", mediaId, ownerId);
+    if (!media || mediaReferenced(media.id)) return false;
+    for (const filename of [media.filename, media.posterFilename].filter(Boolean))
+      run("INSERT OR IGNORE INTO social_file_deletions(filename,createdAt) VALUES(?,?)", filename, stamp());
+    run("DELETE FROM social_media WHERE id=?", media.id);
+    return true;
+  }
+  async function cleanupFiles() {
+    for (const { filename } of all("SELECT filename FROM social_file_deletions")) {
+      if (!/^media_[a-f0-9-]+(?:-poster)?\.(?:jpg|mp4)$/i.test(filename)) continue;
+      // Never delete bytes retained by another database attachment.
+      if (get("SELECT 1 FROM social_media WHERE filename=? OR posterFilename=?", filename, filename)) continue;
+      try { await unlink(path.join(mediaDir, filename)); }
+      catch (error) { if (error.code !== "ENOENT") continue; }
+      run("DELETE FROM social_file_deletions WHERE filename=?", filename);
+    }
+  }
   function patchProfile(user, data) {
     const profile = ensureProfile(user),
       fields = {};
@@ -516,6 +552,14 @@ export function createSocial({
       );
     if (own(data, "openToCollab"))
       fields.openToCollab = bool(data.openToCollab, "openToCollab");
+    if (own(data, "avatarMediaId")) {
+      fields.avatarMediaId = data.avatarMediaId === null ? null
+        : string(data.avatarMediaId, "avatarMediaId", { required: true, max: 100 });
+      if (fields.avatarMediaId && !get(
+        "SELECT 1 FROM social_media WHERE id=? AND ownerId=? AND kind='image' AND exampleFilename IS NULL",
+        fields.avatarMediaId, user.id,
+      )) fail(400, "Choose a photo uploaded by your own account.");
+    }
     if (!Object.keys(fields).length)
       fail(400, "No editable profile fields supplied.");
     fields.reviewStatus = "pending";
@@ -533,6 +577,8 @@ export function createSocial({
     );
     if (fields.visibility === 'private') moderation.cancelAuthor(profile.userId);
     moderation.enqueue('profile', profile.userId);
+    if (own(fields, "avatarMediaId") && profile.avatarMediaId && profile.avatarMediaId !== fields.avatarMediaId)
+      reclaimMedia(profile.avatarMediaId, user.id);
     });
     return profileRow(user.id);
   }
@@ -878,11 +924,11 @@ export function createSocial({
     if (pathname === "/api/social/me") {
       const profile = requireUser();
       if (req.method === "GET") return respond(200, profileJSON(profile, user));
-      if (req.method === "PATCH")
-        return respond(
-          200,
-          profileJSON(patchProfile(user, await body(req)), user),
-        );
+      if (req.method === "PATCH") {
+        const updated = patchProfile(user, await body(req));
+        await cleanupFiles();
+        return respond(200, profileJSON(updated, user));
+      }
     }
     if (pathname === "/api/social/profiles" && req.method === "GET") {
       const q = string(url.searchParams.get("q") ?? "", "search", {
@@ -1128,6 +1174,16 @@ export function createSocial({
       }
     }
     const mediaMatch = pathname.match(/^\/api\/social\/media\/([^/]+)(\/poster)?$/);
+    if (mediaMatch && !mediaMatch[2] && req.method === "DELETE") {
+      requireUser();
+      transaction(() => {
+        const media = get("SELECT id FROM social_media WHERE id=? AND ownerId=? AND exampleFilename IS NULL", mediaMatch[1], user.id);
+        if (!media) fail(404, "Media not found.");
+        if (!reclaimMedia(media.id, user.id)) fail(409, "This media is still attached to a post or profile.");
+      });
+      await cleanupFiles();
+      return respond(200, { ok: true });
+    }
     if (mediaMatch && ["GET", "HEAD"].includes(req.method)) {
       const media = get(
         "SELECT * FROM social_media WHERE id=? AND exampleFilename IS NULL",
@@ -1141,9 +1197,11 @@ export function createSocial({
       const visibleAttachment = attachments.some((post) =>
         postVisible(post, user),
       );
+      const avatarProfile = get("SELECT userId FROM social_profiles WHERE avatarMediaId=?", media.id);
+      const visibleAvatar = avatarProfile && profileVisible(profileRow(avatarProfile.userId), user);
       if (
-        !visibleAttachment &&
-        !(media.ownerId === user?.id && attachments.length === 0)
+        !visibleAttachment && !visibleAvatar &&
+        !(media.ownerId === user?.id && attachments.length === 0 && !avatarProfile)
       )
         fail(404, "Image not found.");
       const file = path.join(mediaDir, mediaMatch[2] ? media.posterFilename : media.filename);
@@ -1629,7 +1687,7 @@ export function createSocial({
             .filter(Boolean)
             .map((profile) => profile.reviewStatus === "approved" && profile.visibility === "public"
               ? profileJSON(profile, user)
-              : { userId: profile.userId, handle: "", displayName: "Unavailable creator", bio: "", roles: [], fandoms: [], city: "", websiteUrl: "", instagramUrl: "", visibility: "private", openToCollab: false, isExample: false, viewerFollowing: false, followerCount: 0, projectCount: 0 }),
+              : { userId: profile.userId, handle: "", displayName: "Unavailable creator", avatar: null, bio: "", roles: [], fandoms: [], city: "", websiteUrl: "", instagramUrl: "", visibility: "private", openToCollab: false, isExample: false, viewerFollowing: false, followerCount: 0, projectCount: 0 }),
         );
       if (req.method === "POST") {
         realUser(user);
@@ -1704,5 +1762,6 @@ export function createSocial({
     );
   };
   route.moderation = moderation;
+  route.cleanupFiles = cleanupFiles;
   return route;
 }

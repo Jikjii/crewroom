@@ -496,6 +496,8 @@ export const socialApi = {
       method: "POST",
       body: { base64, mimeType },
     }),
+  deleteUnusedMedia: (id: string): Promise<{ ok: true }> =>
+    request(`/api/social/media/${segment(id)}`, { method: "DELETE" }),
   savePost: (id: string, saved: boolean): Promise<{ saved: boolean }> =>
     request(`/api/social/posts/${segment(id)}/save`, {
       method: "POST",

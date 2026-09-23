@@ -636,6 +636,7 @@ export function createApp({
     mediaDir: resolvedMediaDir, appOrigin, logger, production, secureCookies, mailSender, operatorName, supportEmail, minimumAge, privacyPolicyUrl, termsUrl, policyVersion, requirePolicyAcceptance, policiesApproved, resetTokenTtlMs,
   });
   accounts.cleanupFiles().catch(() => logger.warn?.("Account media cleanup remains pending."));
+  social.cleanupFiles().catch(() => logger.warn?.("Unused social media cleanup remains pending."));
   const beta = createBeta({ db, get, all, run, transaction, id, now, digest, secret, fail, string, send, body, limited,
     appOrigin, mailSender, supportEmail, minimumAge, production, logger });
   const moderationAdmin = createModerationAdmin({ db, mediaDir: resolvedMediaDir, operatorIds: moderationOperatorIds,

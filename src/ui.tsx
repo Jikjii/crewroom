@@ -1,12 +1,14 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import { useTheme, readableOnColor, type Palette } from "./theme";
 import {
   ActivityIndicator,
+  Image,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
   View,
+  type ImageSourcePropType,
 } from "react-native";
 import Ionicons from "@expo/vector-icons/Ionicons";
 
@@ -85,18 +87,38 @@ export function IconButton({
     </Pressable>
   );
 }
-export function Avatar({
-  name,
-  color,
-  size = 42,
-}: {
+interface AvatarProps {
   name: string;
   color?: string;
   size?: number;
-}) {
+  source?: ImageSourcePropType;
+}
+
+export function Avatar(props: AvatarProps) {
+  const { source } = props;
+  const imageKey = typeof source === "number"
+    ? `asset:${source}`
+    : Array.isArray(source)
+      ? source.map((image) => image.uri ?? "").join("|")
+      : source?.uri ?? "initials";
+  // A replacement gets fresh image state; late errors from the old image
+  // cannot hide a newer profile picture.
+  return <AvatarContent key={imageKey} {...props} />;
+}
+
+function AvatarContent({
+  name,
+  color,
+  size = 42,
+  source,
+}: AvatarProps) {
   const { C, s } = useUI();
+  const [failed, setFailed] = useState(false);
   return (
     <View
+      accessible
+      accessibilityRole="image"
+      accessibilityLabel={`${name}'s profile picture`}
       style={[
         s.avatar,
         {
@@ -104,23 +126,35 @@ export function Avatar({
           height: size,
           borderRadius: size / 2,
           backgroundColor: color ?? C.lavender,
+          overflow: "hidden",
         },
       ]}
     >
-      <Text
-        style={{
-          color: readableOnColor(color ?? C.lavender),
-          fontWeight: "700",
-          fontSize: size * 0.31,
-        }}
-      >
-        {name
-          .split(" ")
-          .map((n) => n[0])
-          .slice(0, 2)
-          .join("")
-          .toUpperCase()}
-      </Text>
+      {source && !failed ? (
+        <Image
+          source={source}
+          resizeMode="cover"
+          accessible={false}
+          onError={() => setFailed(true)}
+          style={{ width: "100%", height: "100%" }}
+        />
+      ) : (
+        <Text
+          accessible={false}
+          style={{
+            color: readableOnColor(color ?? C.lavender),
+            fontWeight: "700",
+            fontSize: size * 0.31,
+          }}
+        >
+          {name
+            .split(" ")
+            .map((n) => n[0])
+            .slice(0, 2)
+            .join("")
+            .toUpperCase()}
+        </Text>
+      )}
     </View>
   );
 }

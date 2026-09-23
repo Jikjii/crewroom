@@ -21,6 +21,8 @@ export type ReportReason = "harassment" | "sexual-content" | "threats" | "hate" 
 
 export interface CreatorProfile extends ContentReview {
   userId: string;
+  /** Optional for compatibility with older photo-less servers. */
+  avatar?: MediaAsset | null;
   handle: string;
   displayName: string;
   bio: string;
@@ -153,6 +155,8 @@ export interface CreatePostInput {
 export type UpdatePostInput = Partial<CreatePostInput>;
 
 export interface UpdateProfileInput {
+  /** Omit to keep the photo; null removes it. */
+  avatarMediaId?: string | null;
   handle?: string;
   displayName?: string;
   bio?: string;
