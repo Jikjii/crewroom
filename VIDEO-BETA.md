@@ -1,6 +1,6 @@
 # Crewroom iPhone video beta
 
-Updated September 22, 2026. The interface refresh and video-capable backend are deployed. Signed iPhone candidate **0.4.0 (3)** is ready for the owner's registered iPhone: [open the Expo installation page in iPhone Safari](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/f7f2b4d4-a3e3-4558-b8da-6f1ba712e0b1), then choose **Install**. Physical-device acceptance is still pending. The current private TestFlight release remains 0.3.0 (2); this candidate has not been distributed to that group. The previous photo-only iPhone tests in `NATIVE-TESTING.md` do not validate this release.
+Updated September 22, 2026. The interface refresh and video-capable backend are deployed. Signed iPhone candidate **0.4.0 (4)** with the moderation UI follow-up is ready for the owner's registered iPhone: [open the Expo installation page in iPhone Safari](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/3239cd1b-a202-4506-8453-23adb4b1099b), then choose **Install**. Physical-device acceptance is still pending. The current private TestFlight release remains 0.3.0 (2); this candidate has not been distributed to that group. The previous photo-only iPhone tests in `NATIVE-TESTING.md` do not validate this release.
 
 ## Scope
 
@@ -8,7 +8,7 @@ Updated September 22, 2026. The interface refresh and video-capable backend are 
 - Use one video per post, up to 60 seconds and 50 MiB (shown as 50 MB in the app). SDR MP4 and MOV inputs are processed into an MP4 and a still preview. HDR clips are rejected with guidance to choose/export SDR or turn off HDR Video in camera settings; the beta does not attempt HDR tone mapping. The original upload is temporary, not the published copy.
 - Browse videos in the native app. Existing saving, creator profiles, comments, reports, blocking, and collaboration workflows still apply.
 - Keep the web experience focused on photos, project details, and the existing creative network. The beta does not introduce a web camera or web video feed.
-- Keep public submissions behind human review. A private draft can be viewed by its owner immediately; submitting for public sharing does not publish automatically.
+- Public submissions currently remain under human review. [HYBRID-MODERATION.md](HYBRID-MODERATION.md) tracks the prepared photo/text screening activation; the selected Starter configuration keeps video under human review. A private draft can be viewed by its owner immediately.
 
 This first version does not add music licensing, effects, a timeline editor, live streaming, or an algorithmic recommendation system. Record only material and audio you have permission to share.
 

@@ -1,6 +1,6 @@
 # Crewroom moderation setup and operating guide
 
-**Deployment in progress September 22, 2026.** The moderation desk/backend at `5af210e` is deployed on Render in manual mode. Automatic screening is not activated, and no iPhone binary containing these moderation changes has been built. The owner selected Sightengine Starter ($29/month) for photo/text checks with human video review, and selected their personal Jikjii account for operator access. Keep `MODERATION_MODE=manual` until credentials, operator access, current-model coverage and live acceptance checks are complete.
+**Deployment in progress September 22, 2026.** The moderation desk/backend at `e813943` is deployed on Render in manual mode. Automatic screening is not activated. Signed iPhone preview 0.4.0 (4) includes the new moderation UI and is ready for physical testing; it has not replaced the private TestFlight release. The owner selected Sightengine Starter ($29/month) for photo/text checks with human video review, and selected their personal Jikjii account for operator access. Keep `MODERATION_MODE=manual` until credentials, operator access, current-model coverage and live acceptance checks are complete.
 
 ## What changes for creators
 
@@ -103,3 +103,7 @@ node scripts/check-moderation-live.mjs --public-demo-fixtures
 ```
 
 This opt-in check sends only the three hash-pinned fictional demo assets already shipped with Crewroom and synthetic text/OCR fixtures. It never reads user uploads or the production database and changes no production flags. It caps itself at ten HTTP requests, requires exact pass/hold outcomes, checks that Starter videos make no provider calls, and prints only fixed sanitized result codes. A provider error cannot masquerade as successful harmful-content detection. Model operations can exceed HTTP request count. All seven cases must pass before considering activation, followed by the broader acceptance checks above. This small fixture set does not establish classifier accuracy across cosplay, languages or all safety categories.
+
+- Follow-up Render deployment `dep-dapjue7lk1mc73bsgcag` succeeded at `e813943`, adding explicit OCR 2.0 checks, five-model output validation and the opt-in live test command. Screening remains manual.
+- Signed iPhone preview **0.4.0 (4)** succeeded: [installation page](https://expo.dev/accounts/geraldogs-team/projects/crewroom/builds/3239cd1b-a202-4506-8453-23adb4b1099b). It contains native client revision `5af210e`; the subsequent changes are server-only/tests/docs. Camera, video, report/block and moderation-status physical acceptance remain pending.
+- At handoff, the personal operator ID and manual mode were staged in Render but not saved, pending the browser-required permission grant confirmation. Credential transfer permission and Starter checkout also remained pending. No Sightengine secret has been copied to Render, and no production content has been sent for automatic screening.
