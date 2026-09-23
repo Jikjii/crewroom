@@ -14,6 +14,8 @@ export interface VideoPlayerProps {
   active?: boolean;
   controls?: boolean;
   muted?: boolean;
+  /** Supplying a callback makes mute state controlled by the parent. */
+  onMutedChange?: (muted: boolean) => void;
   suspended?: boolean;
   style?: StyleProp<ViewStyle>;
 }

@@ -57,6 +57,8 @@ export default function FocusFeed({
   const [loadingMore, setLoadingMore] = useState(false);
   const [pageError, setPageError] = useState("");
   const [sharing, setSharing] = useState(false);
+  // Keep the listener's choice while individual video cards mount and unmount.
+  const [muted, setMuted] = useState(true);
   const lock = useRef(false);
   const pageLock = useRef(false);
   const autoLoadArmed = useRef(true);
@@ -162,7 +164,7 @@ export default function FocusFeed({
           pagingEnabled
           showsVerticalScrollIndicator={false}
           decelerationRate="fast"
-          extraData={{ index, busy, sharing }}
+          extraData={{ index, busy, sharing, muted, suspended }}
           initialNumToRender={2}
           maxToRenderPerBatch={3}
           windowSize={3}
@@ -198,7 +200,8 @@ export default function FocusFeed({
                   active={!sharing && !suspended}
                   suspended={suspended}
                   controls={false}
-                  muted
+                  muted={muted}
+                  onMutedChange={setMuted}
                   style={StyleSheet.absoluteFill}
                 />
               ) : post.media[0] &&

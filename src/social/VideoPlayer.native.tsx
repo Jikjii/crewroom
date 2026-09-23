@@ -18,18 +18,20 @@ export default function VideoPlayer({
   active = false,
   controls = true,
   muted = false,
+  onMutedChange,
   suspended = false,
   style,
 }: VideoPlayerProps) {
   const [foreground, setForeground] = useState(
     AppState.currentState === "active",
   );
-  const [soundOff, setSoundOff] = useState(muted);
+  const [localMuted, setLocalMuted] = useState(muted);
+  const soundOff = onMutedChange ? muted : localMuted;
   const player = useVideoPlayer(
     { ...mediaSource(media), useCaching: false },
     (p) => {
       p.loop = !controls;
-      p.muted = muted;
+      p.muted = soundOff;
       p.staysActiveInBackground = false;
       p.audioMixingMode = "mixWithOthers";
     },
@@ -47,12 +49,12 @@ export default function VideoPlayer({
     return () => sub.remove();
   }, []);
   useEffect(() => {
+    player.muted = soundOff;
+  }, [soundOff, player]);
+  useEffect(() => {
     if (active && foreground && !suspended) player.play();
     else player.pause();
   }, [active, foreground, suspended, player]);
-  useEffect(() => {
-    player.muted = soundOff;
-  }, [soundOff, player]);
   return (
     <View style={[{ backgroundColor: "#09090E", overflow: "hidden" }, style]}>
       <VideoView
@@ -147,7 +149,11 @@ export default function VideoPlayer({
           <Pressable
             accessibilityRole="button"
             accessibilityLabel={soundOff ? "Unmute video" : "Mute video"}
-            onPress={() => setSoundOff((v) => !v)}
+            onPress={() => {
+              const nextMuted = !soundOff;
+              if (onMutedChange) onMutedChange(nextMuted);
+              else setLocalMuted(nextMuted);
+            }}
             style={button}
           >
             <Icon
