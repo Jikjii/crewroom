@@ -8,7 +8,9 @@ import sharp from 'sharp';
 import { createSightengineModerator } from '../server/sightengine.mjs';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const MAX_REQUESTS = 10;
+// Three text fixtures can each need two requests; four images can each need a
+// workflow, OCR, and two contextual text checks. There are no automatic retries.
+const MAX_REQUESTS = 22;
 const DEMOS = Object.freeze([
   { name: 'armor-workbench', hash: '231356cce1efea102462bd4721b2ac8bcd1838e5e57c55a162f9f7a2d0feb371' },
   { name: 'forest-maker', hash: '34c12a7686422dfaa6a5cfce0a190799364dfc3ae16b5ec3a13bcfb76053da27' },
@@ -22,6 +24,7 @@ const SAFE_CODES = new Set([
   'screening_busy', 'invalid_media', 'media_unavailable', 'media_changed',
 ]);
 const THREAT_FIXTURE = 'I will kill you.';
+const SPANISH_SELF_HARM_FIXTURE = 'Quiero suicidarme.';
 const HARMLESS_FIXTURE = 'I made this costume from foam and fabric. I enjoyed building it with my friends.';
 
 // Path-based lettering keeps this OCR fixture readable even in the slim Render
@@ -103,7 +106,7 @@ export async function runLiveModerationChecks({ argv = process.argv.slice(2), en
     const ocrFile = path.join(temporary, 'synthetic-ocr-fixture.png');
     await sharp(threatSVG()).png().toFile(ocrFile);
     emit({
-      event: 'start', fixtures: 7, maxRequests: MAX_REQUESTS,
+      event: 'start', fixtures: 8, maxRequests: MAX_REQUESTS,
       content: 'fixed_public_ai_demo_images_and_synthetic_text_only',
       workflowVerification: 'constructor_override_for_this_test_only', productionFlagsChanged: false,
       billing: 'live_provider_requests_consume_operations_per_configured_models',
@@ -113,6 +116,7 @@ export async function runLiveModerationChecks({ argv = process.argv.slice(2), en
       { id: 'harmless-caption', text: HARMLESS_FIXTURE, media: [], expected: 'pass', code: 'automated_checks_passed' },
       ...DEMOS.map(demo => ({ id: `public-demo-${demo.name}`, text: '', media: [{ kind: 'image', file: path.join(ROOT, 'assets', 'demo', `${demo.name}.png`) }], expected: 'pass', code: 'automated_checks_passed' })),
       { id: 'synthetic-threatening-caption', text: THREAT_FIXTURE, media: [], expected: 'review', code: 'text_flagged' },
+      { id: 'synthetic-spanish-self-harm-caption', text: SPANISH_SELF_HARM_FIXTURE, media: [], expected: 'review', code: 'text_flagged' },
       { id: 'synthetic-threatening-image-text', text: '', media: [{ kind: 'image', file: ocrFile }], expected: 'review', code: 'image_text_flagged' },
       // No clip exists or is needed: Starter must hold before reading media or
       // making even a caption request. Any attempted transfer fails this case.

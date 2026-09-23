@@ -6,8 +6,9 @@ import { tmpdir } from 'node:os';
 import { createSightengineModerator, SIGHTENGINE_SETUP } from '../server/sightengine.mjs';
 
 const configuration = { apiUser: 'test-user', apiSecret: 'test-secret', imageWorkflow: 'wfl_images', videoWorkflow: 'wfl_videos', workflowsVerified: true, minRequestIntervalMs: 0 };
-const classes = ['sexual', 'discriminatory', 'insulting', 'violent', 'toxic', 'self-harm'];
-const textOK = () => ({ status: 'success', request: { id: 'req_text' }, moderation_classes: { available: classes, ...Object.fromEntries(classes.map(name => [name, 0.01])) } });
+const classes = ['sexual', 'discriminatory', 'insulting', 'violent', 'toxic'];
+const textOK = () => ({ status: 'success', request: { id: 'req_text' }, moderation_classes: { available: classes, ...Object.fromEntries(classes.map(name => [name, 0.01])) }, 'self-harm': { matches: [] } });
+const selfHarmOK = () => ({ status: 'success', request: { id: 'req_self_harm' }, moderation_classes: { available: ['self-harm'], 'self-harm': 0.01 } });
 const imageOK = () => ({
   status: 'success', request: { id: 'req_image' }, workflow: { id: 'wfl_images' }, summary: { action: 'accept', reject_prob: 0.01, reject_reason: [] },
   nudity: { sexual_activity: 0.01, sexual_display: 0.01, erotica: 0.01 },
@@ -16,7 +17,7 @@ const imageOK = () => ({
   violence: { prob: 0.01 },
   'self-harm': { prob: 0.01 },
 });
-const imageTextOK = () => ({ status: 'success', request: { id: 'req_image_text' }, text: { language: 'en', detected_categories: [], detections: {} } });
+const imageTextOK = () => ({ status: 'success', request: { id: 'req_image_text' }, text: { content: '', language: 'en', detected_categories: [], detections: {} } });
 const videoOK = () => ({ status: 'success', request: { id: 'req_video' }, workflow: { id: 'wfl_videos' }, summary: imageOK().summary, data: { frames: [{ info: { position: 0 } }] } });
 const audioOK = () => ({ status: 'success', request: { id: 'req_audio' }, data: { audio: { profanity: [] }, frames: [{ info: { position: 0 }, text: imageTextOK().text }] } });
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
@@ -48,51 +49,102 @@ test('Sightengine preparation performs no I/O and is disabled without verified c
   assert.equal(videos.videoReady, true);
   assert.equal(videos.readiness.audioEnglishOnly, true);
   assert.match(SIGHTENGINE_SETUP.audioLimit, /not comprehensive or multilingual/);
+  assert.equal(photos.readiness.textSelfHarmLanguage, 'en');
+  assert.equal(photos.readiness.textSelfHarmMultilingualRules, true);
+  assert.match(SIGHTENGINE_SETUP.textSelfHarmLimit, /English-only/);
   assert.deepEqual(SIGHTENGINE_SETUP.visualModels, ['nudity-2.1', 'gore-2.0', 'offensive-2.0', 'violence', 'self-harm']);
-  assert.equal(SIGHTENGINE_SETUP.imageTextModel, 'text-content-2.0');
+  assert.equal(SIGHTENGINE_SETUP.imageTextModel, 'ocr,text-content-2.0');
+  assert.equal(SIGHTENGINE_SETUP.imageTextLanguage, 'en');
+  assert.equal(photos.readiness.imageTextScript, 'Latin');
 });
 
 test('all text and every image must pass; requests use fixed HTTPS multipart without public URLs or local filenames', async t => {
   const f = await fixture(t), calls = [];
   const moderator = createSightengineModerator({ ...configuration, fetchImpl: async (url, options) => {
     calls.push({ url, options });
-    return json(url.endsWith('/text/check.json') ? textOK() : url.endsWith('/check-workflow.json') ? imageOK() : imageTextOK());
+    return json(url.endsWith('/text/check.json') ? options.body.get('models') === 'general' ? textOK() : selfHarmOK() : url.endsWith('/check-workflow.json') ? imageOK() : imageTextOK());
   } });
   const result = await moderator.screen(submission([{ file: f.image, kind: 'image' }, { file: f.image, kind: 'image' }]));
-  assert.equal(result.decision, 'pass'); assert.equal(calls.length, 5);
-  assert.deepEqual(calls.map(call => call.url), ['https://api.sightengine.com/1.0/text/check.json', 'https://api.sightengine.com/1.0/check-workflow.json', 'https://api.sightengine.com/1.0/check.json', 'https://api.sightengine.com/1.0/check-workflow.json', 'https://api.sightengine.com/1.0/check.json']);
+  assert.equal(result.decision, 'pass'); assert.equal(calls.length, 6);
+  assert.deepEqual(calls.map(call => call.url), ['https://api.sightengine.com/1.0/text/check.json', 'https://api.sightengine.com/1.0/text/check.json', 'https://api.sightengine.com/1.0/check-workflow.json', 'https://api.sightengine.com/1.0/check.json', 'https://api.sightengine.com/1.0/check-workflow.json', 'https://api.sightengine.com/1.0/check.json']);
   for (const { options } of calls) {
     assert.equal(options.method, 'POST'); assert.equal(options.redirect, 'error');
     assert.equal(options.body.get('api_user'), 'test-user'); assert.equal(options.body.get('api_secret'), 'test-secret');
     assert.equal(options.body.has('url'), false); assert.equal(options.body.has('stream_url'), false);
   }
-  assert.equal(calls[0].options.body.get('models'), 'general,self-harm');
+  assert.equal(calls[0].options.body.get('models'), 'general');
+  assert.equal(calls[0].options.body.get('mode'), 'ml,rules');
+  assert.equal(calls[0].options.body.get('categories'), 'self-harm');
   assert.equal(calls[0].options.body.get('lang'), 'en,es');
-  assert.equal(calls[1].options.body.get('workflow'), 'wfl_images');
-  assert.equal(calls[1].options.body.get('media').name, 'image');
-  assert.equal(await calls[1].options.body.get('media').text(), 'image-byte-fixture');
-  for (const i of [2, 4]) {
-    assert.equal(calls[i].options.body.get('models'), 'text-content-2.0');
+  assert.equal(calls[1].options.body.get('models'), 'self-harm');
+  assert.equal(calls[1].options.body.get('mode'), 'ml');
+  assert.equal(calls[1].options.body.get('lang'), 'en');
+  assert.equal(calls[1].options.body.has('categories'), false);
+  assert.equal(calls[2].options.body.get('workflow'), 'wfl_images');
+  assert.equal(calls[2].options.body.get('media').name, 'image');
+  assert.equal(await calls[2].options.body.get('media').text(), 'image-byte-fixture');
+  for (const i of [3, 5]) {
+    assert.equal(calls[i].options.body.get('models'), 'ocr,text-content-2.0');
     assert.equal(calls[i].options.body.get('text_categories'), 'sexual,insult,inappropriate,discriminatory,violence,self_harm,grooming,extremism');
-    assert.equal(calls[i].options.body.get('opt_lang'), 'en,es');
+    assert.equal(calls[i].options.body.get('opt_lang'), 'en');
     assert.equal(calls[i].options.body.get('media').name, 'image');
     assert.equal(await calls[i].options.body.get('media').text(), 'image-byte-fixture');
   }
 });
 
-test('text scores must cover every model class and be finite probabilities below the review threshold', async () => {
+test('general text scores must cover every model class and be finite probabilities below the review threshold', async () => {
   for (const mutate of [
     body => { body.moderation_classes.violent = 0.5; },
-    body => { delete body.moderation_classes['self-harm']; },
+    body => { delete body.moderation_classes.discriminatory; },
     body => { body.moderation_classes.available = ['toxic']; },
     body => { body.moderation_classes.sexual = '0.01'; },
     body => { body.moderation_classes.insulting = -1; },
     body => { body.moderation_classes.toxic = null; },
   ]) {
     const body = textOK(); mutate(body);
-    const moderator = createSightengineModerator({ ...configuration, fetchImpl: async () => json(body) });
+    let calls = 0;
+    const moderator = createSightengineModerator({ ...configuration, fetchImpl: async () => { calls++; return json(body); } });
     assert.equal((await moderator.screen(submission([]))).decision, 'review');
+    assert.equal(calls, 1);
   }
+});
+
+test('multilingual self-harm rules must explicitly succeed before the English classifier can run', async () => {
+  for (const [change, expected] of [
+    [body => { delete body['self-harm']; }, 'text_coverage_missing'],
+    [body => { body['self-harm'] = null; }, 'text_coverage_missing'],
+    [body => { body['self-harm'].matches = null; }, 'text_coverage_missing'],
+    [body => { body['self-harm'].matches = {}; }, 'text_coverage_missing'],
+    [body => { delete body['self-harm'].matches; }, 'text_coverage_missing'],
+    [body => { body['self-harm'].matches = [{ match: 'private submitted text' }]; }, 'text_flagged'],
+  ]) {
+    const body = textOK(); change(body); let calls = 0;
+    const moderator = createSightengineModerator({ ...configuration, fetchImpl: async () => { calls++; return json(body); } });
+    const decision = await moderator.screen(submission([]));
+    assert.equal(decision.reason, expected); assert.equal(calls, 1);
+    assert.equal(JSON.stringify(decision).includes('private submitted text'), false);
+  }
+});
+
+test('English self-harm ML must also return its own valid passing score after multilingual checks pass', async () => {
+  for (const mutate of [
+    body => { body.moderation_classes['self-harm'] = 0.5; },
+    body => { body.moderation_classes['self-harm'] = '0.01'; },
+    body => { body.moderation_classes['self-harm'] = null; },
+    body => { body.moderation_classes['self-harm'] = -1; },
+    body => { delete body.moderation_classes['self-harm']; },
+    body => { body.moderation_classes.available = []; },
+    body => { delete body.moderation_classes; },
+  ]) {
+    const selfHarm = selfHarmOK(); mutate(selfHarm); let calls = 0;
+    const moderator = createSightengineModerator({ ...configuration, fetchImpl: async () => json(++calls === 1 ? textOK() : selfHarm) });
+    assert.equal((await moderator.screen(submission([]))).decision, 'review');
+    assert.equal(calls, 2);
+  }
+  let calls = 0;
+  const failingSecondRequest = createSightengineModerator({ ...configuration, fetchImpl: async () => ++calls === 1 ? json(textOK()) : json({ error: 'provider denied' }, 400) });
+  assert.equal((await failingSecondRequest.screen(submission([]))).decision, 'review');
+  assert.equal(calls, 2);
 });
 
 test('image rejection, missing acceptance, wrong workflow, and inconsistent acceptance always require review', async t => {
@@ -171,7 +223,7 @@ test('embedded text cannot bypass moderation even when the visual workflow accep
   }
 });
 
-test('OCR requires the current complete schema, configured language and no category matches or contradictory details', async t => {
+test('OCR requires complete raw content, valid result containers and known language even when rules report no matches', async t => {
   const f = await fixture(t);
   for (const mutate of [
     body => { delete body.text; },
@@ -184,22 +236,74 @@ test('OCR requires the current complete schema, configured language and no categ
     body => { body.text.detected_categories = [null]; },
     body => { body.text.detected_categories = ['']; },
     body => { delete body.text.detections; },
-    body => { body.text.detections = []; },
     body => { body.text.detections = null; },
     body => { body.text.detections = { violence: { details: [] } }; },
     body => { body.text.detected_categories = ['violence']; },
     body => { delete body.text.language; },
-    body => { body.text.language = null; },
+    body => { body.text.language = null; body.text.content = 'unknown language'; },
+    body => { body.text.language = null; body.text.content = ' '; },
     body => { body.text.language = 'fr'; },
+    body => { body.text.language = 'es'; },
     body => { body.text.language = ''; },
+    body => { delete body.text.content; },
+    body => { body.text.content = null; },
+    body => { body.text.content = []; },
+    body => { body.text.content = 'x'.repeat(12_001); },
   ]) {
     const body = imageTextOK(); mutate(body);
     const moderator = createSightengineModerator({ ...configuration, fetchImpl: async url => json(url.endsWith('/check-workflow.json') ? imageOK() : body) });
     assert.equal((await moderator.screen({ type: 'post', text: '', media: [{ kind: 'image', file: f.image }] })).decision, 'review');
   }
-  const spanish = imageTextOK(); spanish.text.language = 'es';
-  const moderator = createSightengineModerator({ ...configuration, fetchImpl: async url => json(url.endsWith('/check-workflow.json') ? imageOK() : spanish) });
+});
+
+test('explicit no-text OCR accepts documented objects and calibrated empty arrays with null language without extra text requests', async t => {
+  const f = await fixture(t);
+  for (const [language, detections] of [['en', {}], ['en', []], [null, {}], [null, []]]) {
+    let calls = 0;
+    const emptyOCR = imageTextOK(); emptyOCR.text.language = language; emptyOCR.text.detections = detections;
+    const moderator = createSightengineModerator({ ...configuration, fetchImpl: async url => { calls++; return json(url.endsWith('/check-workflow.json') ? imageOK() : emptyOCR); } });
+    assert.equal((await moderator.screen({ type: 'post', text: '', media: [{ kind: 'image', file: f.image }] })).decision, 'pass');
+    assert.equal(calls, 2);
+  }
+});
+
+test('recognized Latin image text must pass multilingual general/rules and English self-harm checks even if OCR categories are empty', async t => {
+  const f = await fixture(t), calls = [];
+  const ocr = imageTextOK(); ocr.text.content = 'Hice este disfraz de espuma con mis amigos.'; ocr.text.detections = [];
+  const moderator = createSightengineModerator({ ...configuration, fetchImpl: async (url, options) => {
+    calls.push({ url, options });
+    return json(url.endsWith('/check-workflow.json') ? imageOK() : url.endsWith('/text/check.json') ? options.body.get('models') === 'general' ? textOK() : selfHarmOK() : ocr);
+  } });
   assert.equal((await moderator.screen({ type: 'post', text: '', media: [{ kind: 'image', file: f.image }] })).decision, 'pass');
+  assert.equal(calls.length, 4);
+  assert.equal(calls[1].options.body.get('models'), 'ocr,text-content-2.0');
+  assert.equal(calls[1].options.body.get('opt_lang'), 'en');
+  assert.equal(calls[2].options.body.get('text'), ocr.text.content);
+  assert.equal(calls[2].options.body.get('lang'), 'en,es');
+  assert.equal(calls[2].options.body.get('mode'), 'ml,rules');
+  assert.equal(calls[3].options.body.get('text'), ocr.text.content);
+  assert.equal(calls[3].options.body.get('lang'), 'en');
+});
+
+test('contextual checks catch OCR rule misses and never expose extracted text in result codes', async t => {
+  const f = await fixture(t);
+  for (const [mutate, expected, expectedCalls] of [
+    [(general, _selfHarm) => { general.moderation_classes.violent = 0.86; }, 'image_text_flagged', 3],
+    [(general, _selfHarm) => { general['self-harm'].matches = [{ match: 'private extracted phrase' }]; }, 'image_text_flagged', 3],
+    [(_general, selfHarm) => { selfHarm.moderation_classes['self-harm'] = 0.8; }, 'image_text_flagged', 4],
+    [(general, _selfHarm) => { delete general['self-harm']; }, 'image_text_coverage_missing', 3],
+    [(general, _selfHarm) => { delete general.moderation_classes.sexual; }, 'image_text_coverage_missing', 3],
+    [(_general, selfHarm) => { delete selfHarm.moderation_classes['self-harm']; }, 'image_text_coverage_missing', 4],
+  ]) {
+    const general = textOK(), selfHarm = selfHarmOK(), ocr = imageTextOK(); let calls = 0;
+    ocr.text.content = 'private extracted phrase'; ocr.text.detections = [];
+    mutate(general, selfHarm);
+    const responses = [imageOK(), ocr, general, selfHarm];
+    const moderator = createSightengineModerator({ ...configuration, fetchImpl: async () => json(responses[calls++]) });
+    const decision = await moderator.screen({ type: 'post', text: '', media: [{ kind: 'image', file: f.image }] });
+    assert.equal(decision.reason, expected); assert.equal(calls, expectedCalls);
+    assert.equal(JSON.stringify(decision).includes(ocr.text.content), false);
+  }
 });
 
 test('later-image OCR matches and OCR service failures prevent publication of the whole post', async t => {
@@ -237,22 +341,22 @@ test('video requires explicit audio configuration, known short duration, and a p
 
 test('configured video screening checks text, clip visuals, audio, frame text and both poster checks', async t => {
   const f = await fixture(t), calls = [];
-  const responses = [textOK(), videoOK(), audioOK(), imageOK(), imageTextOK()];
+  const responses = [textOK(), selfHarmOK(), videoOK(), audioOK(), imageOK(), imageTextOK()];
   const moderator = createSightengineModerator({ ...configuration, audioModerationEnabled: true, fetchImpl: async (url, options) => {
     calls.push({ url, options }); return json(responses[calls.length - 1]);
   } });
   assert.equal((await moderator.screen(submission([f.videoItem]))).decision, 'pass');
-  assert.equal(calls.length, 5);
-  assert.equal(calls[1].url, 'https://api.sightengine.com/1.0/video/check-workflow-sync.json');
-  assert.equal(calls[2].url, 'https://api.sightengine.com/1.0/video/check-sync.json');
-  assert.equal(calls[2].options.body.get('models'), 'audio-profanity,text-content-2.0');
-  assert.equal(calls[2].options.body.get('opt_lang'), 'en,es');
-  assert.equal(calls[2].options.body.get('text_categories'), SIGHTENGINE_SETUP.imageTextCategories.join(','));
-  assert.equal(await calls[1].options.body.get('media').text(), 'video-byte-fixture');
+  assert.equal(calls.length, 6);
+  assert.equal(calls[2].url, 'https://api.sightengine.com/1.0/video/check-workflow-sync.json');
+  assert.equal(calls[3].url, 'https://api.sightengine.com/1.0/video/check-sync.json');
+  assert.equal(calls[3].options.body.get('models'), 'audio-profanity,ocr,text-content-2.0');
+  assert.equal(calls[3].options.body.get('opt_lang'), 'en');
+  assert.equal(calls[3].options.body.get('text_categories'), SIGHTENGINE_SETUP.imageTextCategories.join(','));
   assert.equal(await calls[2].options.body.get('media').text(), 'video-byte-fixture');
-  assert.equal(await calls[3].options.body.get('media').text(), 'image-byte-fixture');
-  assert.equal(calls[4].url, 'https://api.sightengine.com/1.0/check.json');
+  assert.equal(await calls[3].options.body.get('media').text(), 'video-byte-fixture');
   assert.equal(await calls[4].options.body.get('media').text(), 'image-byte-fixture');
+  assert.equal(calls[5].url, 'https://api.sightengine.com/1.0/check.json');
+  assert.equal(await calls[5].options.body.get('media').text(), 'image-byte-fixture');
 });
 
 test('missing video frames, missing audio results, flagged speech and flagged posters cannot pass', async t => {
@@ -320,7 +424,7 @@ test('requests and response bodies are bounded by time, and caller cancellation 
 test('adapter admits one screening at a time and recovers after completion', async () => {
   let release;
   const gate = new Promise(resolve => { release = resolve; });
-  const moderator = createSightengineModerator({ ...configuration, fetchImpl: async () => { await gate; return json(textOK()); } });
+  const moderator = createSightengineModerator({ ...configuration, fetchImpl: async (_url, options) => { await gate; return json(options.body.get('models') === 'general' ? textOK() : selfHarmOK()); } });
   const first = moderator.screen(submission([]));
   assert.equal((await moderator.screen(submission([]))).reason, 'screening_busy');
   release();

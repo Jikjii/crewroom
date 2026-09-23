@@ -9,7 +9,7 @@ const ENDPOINTS = Object.freeze({
   video: 'https://api.sightengine.com/1.0/video/check-workflow-sync.json',
   audio: 'https://api.sightengine.com/1.0/video/check-sync.json',
 });
-const TEXT_CLASSES = ['sexual', 'discriminatory', 'insulting', 'violent', 'toxic', 'self-harm'];
+const GENERAL_TEXT_CLASSES = ['sexual', 'discriminatory', 'insulting', 'violent', 'toxic'];
 const OCR_CATEGORIES = Object.freeze(['sexual', 'insult', 'inappropriate', 'discriminatory', 'violence', 'self_harm', 'grooming', 'extremism']);
 const IMAGE_CORE_SCORES = Object.freeze({
   nudity: Object.freeze(['sexual_activity', 'sexual_display', 'erotica']),
@@ -35,10 +35,16 @@ const MAX_TEXT_CHARACTERS = 12_000;
 export const SIGHTENGINE_SETUP = Object.freeze({
   visualModels: Object.freeze(['nudity-2.1', 'gore-2.0', 'offensive-2.0', 'violence', 'self-harm']),
   visualPolicy: 'Review explicit nudity/sexual activity, graphic injury, hate symbols, violence/threats and self-harm. Calibrate costumes, skin exposure, stage blood and props with beta examples before enabling. Every required model must run; no early ACCEPT branches. Disable legacy workflow Text Analysis: the adapter separately requires OCR 2.0.',
-  imageTextModel: 'text-content-2.0',
+  imageTextModel: 'ocr,text-content-2.0',
+  imageTextLanguage: 'en',
   imageTextCategories: OCR_CATEGORIES,
-  imageTextPolicy: 'Separately screen embedded text in each image and poster, and sampled video frames when video screening is enabled. Any selected category match requires human review, including low severity. Only complete empty results in a configured language can pass.',
+  imageTextPolicy: 'Extract Latin-script text with OCR and apply OCR 2.0 rules to each image/poster and sampled video frames when enabled. Any category match requires review. Recognized text must additionally pass general classification and self-harm rules in configured languages, plus English-only self-harm ML. Only complete, explicitly empty OCR results can skip contextual text checks. This is not comprehensive coverage of non-Latin scripts.',
   textModels: 'general,self-harm',
+  textGeneralModel: 'general',
+  textRuleCategories: 'self-harm',
+  textSelfHarmModel: 'self-harm',
+  textSelfHarmLanguage: 'en',
+  textSelfHarmLimit: 'General classification and self-harm rules use configured languages. The additional self-harm ML classifier is English-only; live API rejects Spanish for this classifier. Rules do not provide equivalent contextual or comprehensive multilingual self-harm classification.',
   textReviewThreshold: 0.5,
   audioModel: 'audio-profanity',
   audioLanguage: 'en',
@@ -136,13 +142,25 @@ function requireWorkflowAccept(body, workflow, kind) {
   if (kind === 'video' && (!Array.isArray(body.data?.frames) || body.data.frames.length === 0)) fail('video_coverage_missing');
 }
 
-function requireImageTextAccept(text, languages) {
+function requireImageTextAccept(text) {
   // OCR 2.0 reports triggered categories and their match details, not a safe
   // boolean or a probability. Legacy text.profanity results are not coverage.
   // Deliberately do not retain, log or return provider-extracted private text.
-  if (!object(text) || !Array.isArray(text.detected_categories) || !text.detected_categories.every(value => typeof value === 'string' && value.length > 0) || !object(text.detections)) fail('image_text_coverage_missing');
+  if (!object(text) || !Array.isArray(text.detected_categories) || !text.detected_categories.every(value => typeof value === 'string' && value.length > 0) || (!object(text.detections) && !Array.isArray(text.detections))) fail('image_text_coverage_missing');
   if (text.detected_categories.length || Object.keys(text.detections).length) fail('image_text_flagged');
-  if (typeof text.language !== 'string' || !languages.includes(text.language)) fail('image_text_language_unverified');
+  if (typeof text.content !== 'string' || text.content.length > MAX_TEXT_CHARACTERS) fail('image_text_coverage_missing');
+  // Live clean fixtures serialize empty detections as [] and no-text language as
+  // null. Accept only explicit empty content with that null sentinel, never an
+  // omitted language/content field. Raw OCR supports Latin script via en; its
+  // recognized text receives the configured multilingual checks below.
+  if (text.language !== SIGHTENGINE_SETUP.imageTextLanguage && !(text.language === null && text.content === '')) fail('image_text_language_unverified');
+  return text.content;
+}
+
+function requireTextAccept(body, requiredClasses, flaggedCode, missingCode) {
+  const scores = body.moderation_classes;
+  if (!object(scores) || !Array.isArray(scores.available) || requiredClasses.some(key => !scores.available.includes(key) || !probability(scores[key]))) fail(missingCode);
+  if (requiredClasses.some(key => scores[key] >= SIGHTENGINE_SETUP.textReviewThreshold)) fail(flaggedCode);
 }
 
 /**
@@ -170,6 +188,8 @@ export function createSightengineModerator({
   const readiness = Object.freeze({
     ready, videoReady, credentialsConfigured: Boolean(credentials), workflowsVerified: verified,
     text: Boolean(credentials && verified && languageConfig), images: ready,
+    textSelfHarmLanguage: 'en', textSelfHarmMultilingualRules: true,
+    imageTextScript: 'Latin', imageTextContextualChecks: true,
     videoVisuals: Boolean(ready && identifier(videoWorkflow)),
     videoAudio: Boolean(ready && identifier(videoWorkflow) && audioModerationEnabled === true),
     audioLanguage: 'en', audioEnglishOnly: true,
@@ -179,7 +199,7 @@ export function createSightengineModerator({
   // Starter permits one request per second. The worker owns cross-process and
   // aggregate billing limits; this spaces sequential requests within an instance.
   const requestInterval = Number.isFinite(minRequestIntervalMs) ? Math.min(10_000, Math.max(0, minRequestIntervalMs)) : 1100;
-  const imageTextFields = Object.freeze({ models: SIGHTENGINE_SETUP.imageTextModel, text_categories: OCR_CATEGORIES.join(','), opt_lang: languages.join(',') });
+  const imageTextFields = Object.freeze({ models: SIGHTENGINE_SETUP.imageTextModel, text_categories: OCR_CATEGORIES.join(','), opt_lang: SIGHTENGINE_SETUP.imageTextLanguage });
   let lastRequestAt = 0;
   let busy = false;
 
@@ -222,6 +242,23 @@ export function createSightengineModerator({
     }
   }
 
+  async function screenText(text, signal, flaggedCode = 'text_flagged', missingCode = 'text_coverage_missing') {
+    // The live provider rejects Spanish (including en,es) for self-harm ML,
+    // despite the combined language list in its docs. Keep multilingual general
+    // classification + explicit self-harm rules, then require English-only ML.
+    const body = await request(ENDPOINTS.text, { text, mode: 'ml,rules', models: SIGHTENGINE_SETUP.textGeneralModel, categories: SIGHTENGINE_SETUP.textRuleCategories, lang: languages.join(',') }, null, signal);
+    requireTextAccept(body, GENERAL_TEXT_CLASSES, flaggedCode, missingCode);
+    if (!Array.isArray(body['self-harm']?.matches)) fail(missingCode);
+    if (body['self-harm'].matches.length) fail(flaggedCode);
+    const selfHarm = await request(ENDPOINTS.text, { text, mode: 'ml', models: SIGHTENGINE_SETUP.textSelfHarmModel, lang: SIGHTENGINE_SETUP.textSelfHarmLanguage }, null, signal);
+    requireTextAccept(selfHarm, ['self-harm'], flaggedCode, missingCode);
+  }
+
+  async function screenImageText(text, signal) {
+    const content = requireImageTextAccept(text);
+    if (content.trim()) await screenText(content, signal, 'image_text_flagged', 'image_text_coverage_missing');
+  }
+
   async function screen(input = {}, { signal: callerSignal } = {}) {
     if (!ready) return result('review', 'provider_not_configured');
     if (busy) return result('review', 'screening_busy');
@@ -242,19 +279,14 @@ export function createSightengineModerator({
     const timer = setTimeout(() => controller.abort(new Error('moderation_timeout')), totalTimeout);
     try {
       signal.throwIfAborted();
-      if (input.text.trim()) {
-        const body = await request(ENDPOINTS.text, { text: input.text, mode: 'ml', models: SIGHTENGINE_SETUP.textModels, lang: languages.join(',') }, null, signal);
-        const scores = body.moderation_classes;
-        if (!scores || !Array.isArray(scores.available) || TEXT_CLASSES.some(key => !scores.available.includes(key) || !probability(scores[key]))) fail('text_coverage_missing');
-        if (TEXT_CLASSES.some(key => scores[key] >= SIGHTENGINE_SETUP.textReviewThreshold)) fail('text_flagged');
-      }
+      if (input.text.trim()) await screenText(input.text, signal);
       for (const item of media) {
         const blob = await localMedia(item.file, item.kind, signal);
         if (item.kind === 'image') {
           const body = await request(ENDPOINTS.image, { workflow: imageWorkflow }, { blob, kind: 'image' }, signal);
           requireWorkflowAccept(body, imageWorkflow, 'image');
           const imageText = await request(ENDPOINTS.imageText, imageTextFields, { blob, kind: 'image' }, signal);
-          requireImageTextAccept(imageText.text, languages);
+          await screenImageText(imageText.text, signal);
         } else {
           const body = await request(ENDPOINTS.video, { workflow: videoWorkflow }, { blob, kind: 'video' }, signal);
           requireWorkflowAccept(body, videoWorkflow, 'video');
@@ -264,12 +296,12 @@ export function createSightengineModerator({
           if (!Array.isArray(audio.data?.audio?.profanity)) fail('audio_coverage_missing');
           if (audio.data.audio.profanity.length) fail('audio_flagged');
           if (!Array.isArray(audio.data?.frames) || !audio.data.frames.length) fail('image_text_coverage_missing');
-          for (const frame of audio.data.frames) requireImageTextAccept(frame?.text, languages);
+          for (const frame of audio.data.frames) await screenImageText(frame?.text, signal);
           const poster = await localMedia(item.posterFile, 'image', signal);
           const checkedPoster = await request(ENDPOINTS.image, { workflow: imageWorkflow }, { blob: poster, kind: 'image' }, signal);
           requireWorkflowAccept(checkedPoster, imageWorkflow, 'image');
           const posterText = await request(ENDPOINTS.imageText, imageTextFields, { blob: poster, kind: 'image' }, signal);
-          requireImageTextAccept(posterText.text, languages);
+          await screenImageText(posterText.text, signal);
         }
       }
       signal.throwIfAborted();
